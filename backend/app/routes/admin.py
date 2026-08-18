@@ -123,6 +123,7 @@ def compute_district_metrics(dist: District) -> dict:
 
 @router.get("/overview", response_model=GovtCommandOverview)
 def get_admin_overview(db: Session = Depends(get_db)):
+    sync_dynamic_district_alerts(db)
     districts = db.query(District).all()
     dist_metrics = [compute_district_metrics(d) for d in districts]
 
@@ -158,9 +159,115 @@ def get_admin_overview(db: Session = Depends(get_db)):
         "predicted_statewide_deficit_24h": deficit_24h
     }
 
+def sync_dynamic_district_alerts(db: Session):
+    """Dynamically scan all districts and hospitals to auto-create and update critical shortage alerts."""
+    districts = db.query(District).all()
+    for dist in districts:
+        # 1. Check for Zero Healthcare / Coverage Desert
+        if len(dist.hospitals) == 0:
+            existing = db.query(DistrictAlert).filter(
+                DistrictAlert.district_id == dist.id,
+                DistrictAlert.alert_type == "HEALTHCARE_COVERAGE_DESERT",
+                DistrictAlert.is_resolved == False
+            ).first()
+            if not existing:
+                alert = DistrictAlert(
+                    district_id=dist.id,
+                    alert_type="HEALTHCARE_COVERAGE_DESERT",
+                    severity="CRITICAL",
+                    message=f"District {dist.name} has 0 registered hospitals / active beds for population of {round(dist.population/100000, 1)} Lakhs.",
+                    recommended_action="Deploy mobile emergency response clinics and route regional referrals to nearest tertiary facility.",
+                    is_resolved=False,
+                    created_at=datetime.datetime.utcnow()
+                )
+                db.add(alert)
+                db.commit()
+
+        # 2. Check each hospital for critical oxygen depletion or ICU exhaustion
+        for hosp in dist.hospitals:
+            if hosp.oxygen_inventory:
+                o2 = hosp.oxygen_inventory
+                days = o2.bulk_tank_current_kl / max(o2.daily_consumption_kl, 0.1)
+                
+                # Check for critical oxygen condition (<= 3.0 kL or <= 2.0 days buffer or 0 kL)
+                alert_key = f"CRITICAL_OXYGEN_DEPLETION_HOSP_{hosp.id}"
+                if o2.bulk_tank_current_kl <= 3.0 or days <= 2.0:
+                    sev = "EMERGENCY" if o2.bulk_tank_current_kl == 0 else "CRITICAL"
+                    existing_o2 = db.query(DistrictAlert).filter(
+                        DistrictAlert.district_id == dist.id,
+                        DistrictAlert.alert_type == alert_key,
+                        DistrictAlert.is_resolved == False
+                    ).first()
+                    msg = f"EMERGENCY: {hosp.name} ({dist.name}) oxygen reserve depleted to {o2.bulk_tank_current_kl} kL (~{round(days, 1)} days buffer remaining)."
+                    action = f"Authorize immediate LMO cryogenic tanker transfer and backup D-type cylinders dispatch to {hosp.name}."
+                    
+                    if not existing_o2:
+                        alert = DistrictAlert(
+                            district_id=dist.id,
+                            alert_type=alert_key,
+                            severity=sev,
+                            message=msg,
+                            recommended_action=action,
+                            is_resolved=False,
+                            created_at=datetime.datetime.utcnow()
+                        )
+                        db.add(alert)
+                        db.commit()
+                    else:
+                        existing_o2.severity = sev
+                        existing_o2.message = msg
+                        existing_o2.recommended_action = action
+                        db.commit()
+                elif o2.bulk_tank_current_kl > 6.0 and days > 3.5:
+                    # Auto-resolve only THIS hospital's oxygen alert if replenished
+                    resolved = db.query(DistrictAlert).filter(
+                        DistrictAlert.district_id == dist.id,
+                        DistrictAlert.alert_type == alert_key,
+                        DistrictAlert.is_resolved == False
+                    ).all()
+                    for r in resolved:
+                        r.is_resolved = True
+                    db.commit()
+
+            # Check for hospital ICU exhaustion (0 ICU available)
+            hosp_icu = sum(1 for b in hosp.beds if "ICU" in b.bed_type)
+            hosp_avail_icu = sum(1 for b in hosp.beds if "ICU" in b.bed_type and b.status == "AVAILABLE")
+            icu_alert_key = f"CRITICAL_ICU_SHORTAGE_HOSP_{hosp.id}"
+            if hosp_icu > 0 and hosp_avail_icu == 0:
+                existing_icu = db.query(DistrictAlert).filter(
+                    DistrictAlert.district_id == dist.id,
+                    DistrictAlert.alert_type == icu_alert_key,
+                    DistrictAlert.is_resolved == False
+                ).first()
+                msg = f"CRITICAL: {hosp.name} in {dist.name} has 0 available ICU beds (100% ICU capacity saturated)."
+                action = f"Trigger smart emergency referral bypass: route incoming critical patients to nearest alternate facility."
+                if not existing_icu:
+                    alert = DistrictAlert(
+                        district_id=dist.id,
+                        alert_type=icu_alert_key,
+                        severity="CRITICAL",
+                        message=msg,
+                        recommended_action=action,
+                        is_resolved=False,
+                        created_at=datetime.datetime.utcnow()
+                    )
+                    db.add(alert)
+                    db.commit()
+            elif hosp_avail_icu > 2:
+                # Auto-resolve only THIS hospital's ICU alert
+                resolved_icu = db.query(DistrictAlert).filter(
+                    DistrictAlert.district_id == dist.id,
+                    DistrictAlert.alert_type == icu_alert_key,
+                    DistrictAlert.is_resolved == False
+                ).all()
+                for r in resolved_icu:
+                    r.is_resolved = True
+                db.commit()
+
 @router.get("/alerts", response_model=List[DistrictAlertResponse])
 def get_district_alerts(db: Session = Depends(get_db)):
-    alerts = db.query(DistrictAlert).order_by(DistrictAlert.id.desc()).all()
+    sync_dynamic_district_alerts(db)
+    alerts = db.query(DistrictAlert).filter(DistrictAlert.is_resolved == False).order_by(DistrictAlert.id.desc()).all()
     results = []
     for a in alerts:
         results.append({

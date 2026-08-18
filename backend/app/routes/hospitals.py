@@ -226,11 +226,24 @@ async def update_oxygen_inventory(
         hospital_id=hospital_id
     )
 
+    # Synchronize dynamic alerts across state
+    try:
+        from app.routes.admin import sync_dynamic_district_alerts
+        sync_dynamic_district_alerts(db)
+    except Exception as e:
+        print("Alert sync error:", e)
+
     # Broadcast Live WebSocket update
     await manager.broadcast("OXYGEN_LEVEL_UPDATED", {
         "hospital_id": hospital_id,
+        "district_id": hosp.district_id,
         "bulk_tank_current_kl": hosp.oxygen_inventory.bulk_tank_current_kl,
         "cylinder_d_type_count": hosp.oxygen_inventory.cylinder_d_type_count
+    })
+    await manager.broadcast("DISTRICT_ALERT_TRIGGERED", {
+        "district_id": hosp.district_id,
+        "alert_type": "OXYGEN_INVENTORY_UPDATE",
+        "hospital_name": hosp.name
     })
 
     return {"message": "Oxygen inventory updated successfully", "hospital_id": hospital_id}

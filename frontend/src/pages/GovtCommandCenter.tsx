@@ -56,6 +56,7 @@ export const GovtCommandCenter: React.FC = () => {
     const unsubscribe = createWebSocketSubscriber((event) => {
       if ([
         'BED_STATUS_CHANGED', 'BED_OCCUPIED', 'BED_VACATED', 'BED_STATUS_TOGGLED',
+        'OXYGEN_LEVEL_UPDATED', 'BLOOD_LEVEL_UPDATED',
         'IOT_TELEMETRY', 'DISTRICT_ALERT_TRIGGERED', 'RESOURCE_REALLOCATION_DISPATCHED'
       ].includes(event)) {
         loadGovtData(true);
