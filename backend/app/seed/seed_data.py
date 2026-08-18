@@ -17,12 +17,23 @@ def hash_pw(password: str) -> str:
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
-def seed_database():
-    print("Creating tables in database...")
-    Base.metadata.drop_all(bind=engine)
+def seed_database(force_reseed: bool = False):
     Base.metadata.create_all(bind=engine)
-
     db: Session = SessionLocal()
+
+    if not force_reseed:
+        existing_user_count = db.query(User).count()
+        if existing_user_count > 0:
+            print(f"Database already initialized ({existing_user_count} user accounts found). Keeping persistent records.")
+            db.close()
+            return
+
+    if force_reseed:
+        print("Re-creating tables in database (forced reseed)...")
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+
     try:
         print("Seeding Districts...")
         districts_data = [
