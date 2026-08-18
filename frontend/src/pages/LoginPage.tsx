@@ -76,21 +76,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
     }
   };
 
-  // 1-Click Quick Demo Login
-  const handleQuickDemoLogin = async (demoEmail: string, demoPass: string, demoRole: UserRole) => {
-    setSelectedRole(demoRole);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    setLoading(true);
-    try {
-      const res = await api.login(demoEmail, demoPass);
-      setTimeout(() => onLoginSuccess(res.user, demoRole), 400);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Demo login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   // Perform Registration — saves to DB, then auto-logs in
   const handleRegister = async (e: React.FormEvent) => {
@@ -160,42 +146,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
           Real-time bed forecasting, emergency smart referrals, and statewide medical resource command
         </p>
       </div>
-
-      {/* 1-Click Fast Demo Cards */}
-      {!isRegistering && (
-        <div style={{
-          maxWidth: '560px', width: '100%', marginBottom: '20px',
-          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px'
-        }}>
-          {[
-            { role: 'PATIENT' as UserRole, email: 'patient@medflow.in', pass: 'patient123', label: 'Patient', sub: 'Rohan Sharma', icon: <UserIcon size={18} />, bg: '#ccfbf1', color: '#0d9488', badge: '#ecfdf5', badgeColor: '#059669' },
-            { role: 'HOSPITAL_STAFF' as UserRole, email: 'staff@medflow.in', pass: 'staff123', label: 'Hospital Staff', sub: 'Dr. Priya Selvam', icon: <Building2 size={18} />, bg: '#dbeafe', color: '#2563eb', badge: '#eff6ff', badgeColor: '#2563eb' },
-            { role: 'GOVT_ADMIN' as UserRole, email: 'admin@medflow.in', pass: 'admin123', label: 'Govt Admin', sub: 'Dr. Radhakrishnan', icon: <Landmark size={18} />, bg: '#ede9fe', color: '#7c3aed', badge: '#f5f3ff', badgeColor: '#7c3aed' },
-          ].map((d) => (
-            <div
-              key={d.role}
-              onClick={() => handleQuickDemoLogin(d.email, d.pass, d.role)}
-              style={{
-                background: '#ffffff', border: selectedRole === d.role ? `2px solid ${d.color}` : '1px solid #e2e8f0',
-                borderRadius: '12px', padding: '12px', cursor: 'pointer',
-                transition: 'all 0.18s ease', boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                display: 'flex', alignItems: 'center', gap: '10px'
-              }}
-            >
-              <div style={{ width: '36px', height: '36px', borderRadius: '9px', background: d.bg, color: d.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {d.icon}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>{d.label}</span>
-                  <span style={{ fontSize: '0.62rem', background: d.badge, color: d.badgeColor, padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>DEMO</span>
-                </div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Main Card */}
       <div style={{
