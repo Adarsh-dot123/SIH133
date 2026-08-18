@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: medflow-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./medflow.db
+      - SECRET_KEY=medflow_production_super_secret_key_jwt_2026_sih
+      - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000","*"]
+    volumes:
+      - ./backend/medflow.db:/app/medflow.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: medflow-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+      - VITE_WS_URL=ws://localhost:8000
+
+networks:
+  default:
+    name: medflow-network
