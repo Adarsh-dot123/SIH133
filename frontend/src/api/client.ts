@@ -56,6 +56,21 @@ class ApiClient {
     return res;
   }
 
+  async register(data: { email: string; password: string; full_name: string; role: string; hospital_id?: number | null; phone?: string }) {
+    return this.request<any>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getMe() {
+    return this.request<any>('/auth/me');
+  }
+
+  logout() {
+    this.setToken(null);
+  }
+
   // Hospitals
   async getHospitals(params: { district_id?: number; specialty?: string; pmjay_only?: boolean; search?: string } = {}) {
     const query = new URLSearchParams();

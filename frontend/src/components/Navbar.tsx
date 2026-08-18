@@ -1,28 +1,37 @@
 import React from 'react';
-import { UserRole } from '../types';
-import { Activity, ShieldCheck, PhoneCall, Building2, User, Landmark, Cpu, Link2, Sparkles, Radio } from 'lucide-react';
+import { UserRole, User as UserType } from '../types';
+import { 
+  Activity, ShieldCheck, PhoneCall, Building2, User, Landmark, 
+  Cpu, Link2, Sparkles, Radio, LogIn, LogOut, KeyRound
+} from 'lucide-react';
 
 interface NavbarProps {
   currentRole: UserRole;
+  currentUser: UserType | null;
   onRoleChange: (role: UserRole) => void;
   activeTab: string;
   onTabChange: (tab: string) => void;
   isWsConnected: boolean;
   onOpenUssd: () => void;
+  onOpenLogin: () => void;
+  onLogout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentRole,
+  currentUser,
   onRoleChange,
   activeTab,
   onTabChange,
   isWsConnected,
-  onOpenUssd
+  onOpenUssd,
+  onOpenLogin,
+  onLogout
 }) => {
   return (
     <header className="navbar">
       <div className="navbar-inner">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <a href="#" className="brand-logo" onClick={(e) => { e.preventDefault(); onTabChange(currentRole === 'PATIENT' ? 'patient-search' : currentRole === 'HOSPITAL_STAFF' ? 'hospital-dashboard' : 'govt-overview'); }}>
             <div style={{
               width: '36px', height: '36px', borderRadius: '10px',
@@ -135,11 +144,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </nav>
 
-        {/* Stakeholder Role Switcher */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-            Stakeholder Role:
-          </span>
+        {/* Stakeholder Role Switcher & Auth Profile */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Quick Role Switcher */}
           <div className="role-switcher">
             <button
               className={`role-btn ${currentRole === 'PATIENT' ? 'active' : ''}`}
@@ -147,8 +154,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onRoleChange('PATIENT');
                 onTabChange('patient-search');
               }}
+              title="Switch Persona to Patient"
             >
-              <User size={14} /> Patient
+              <User size={13} /> Patient
             </button>
             <button
               className={`role-btn ${currentRole === 'HOSPITAL_STAFF' ? 'active' : ''}`}
@@ -156,8 +164,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onRoleChange('HOSPITAL_STAFF');
                 onTabChange('hospital-dashboard');
               }}
+              title="Switch Persona to Hospital Staff"
             >
-              <Building2 size={14} /> Hospital Staff
+              <Building2 size={13} /> Staff
             </button>
             <button
               className={`role-btn ${currentRole === 'GOVT_ADMIN' ? 'active' : ''}`}
@@ -165,10 +174,79 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onRoleChange('GOVT_ADMIN');
                 onTabChange('govt-overview');
               }}
+              title="Switch Persona to Govt Admin"
             >
-              <Landmark size={14} /> Govt Admin
+              <Landmark size={13} /> Govt
             </button>
           </div>
+
+          {/* User Account / Login State */}
+          {currentUser ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              padding: '4px 10px',
+              borderRadius: '9999px'
+            }}>
+              <div style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '50%',
+                background: currentRole === 'PATIENT' ? '#0d9488' : currentRole === 'HOSPITAL_STAFF' ? '#2563eb' : '#7c3aed',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: 700
+              }}>
+                {currentUser.full_name.charAt(0)}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>
+                  {currentUser.full_name.split(' ')[0]}
+                </span>
+                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                  {currentUser.role}
+                </span>
+              </div>
+              <button
+                onClick={onLogout}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+                title="Sign Out"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onOpenLogin}
+              className="btn btn-primary btn-sm"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 700
+              }}
+            >
+              <LogIn size={14} />
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

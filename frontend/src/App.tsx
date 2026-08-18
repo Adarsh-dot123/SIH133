@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole } from './types';
+import { UserRole, User } from './types';
 import { Navbar } from './components/Navbar';
 import { NotificationToast, ToastMessage } from './components/NotificationToast';
 import { UssdSimulatorModal } from './components/UssdSimulatorModal';
+import { LoginPage } from './pages/LoginPage';
 import { PatientPortal } from './pages/PatientPortal';
 import { HospitalPortal } from './pages/HospitalPortal';
 import { GovtCommandCenter } from './pages/GovtCommandCenter';
@@ -10,15 +11,33 @@ import { DigitalTwinPage } from './pages/DigitalTwinPage';
 import { IoTMonitorPage } from './pages/IoTMonitorPage';
 import { AuditTrailPage } from './pages/AuditTrailPage';
 import { ABDMAdapterPage } from './pages/ABDMAdapterPage';
-import { createWebSocketSubscriber } from './api/client';
+import { api, createWebSocketSubscriber } from './api/client';
 
 export function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('PATIENT');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<string>('patient-search');
   const [isWsConnected, setIsWsConnected] = useState<boolean>(true);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isUssdOpen, setIsUssdOpen] = useState<boolean>(false);
 
+  // Check existing auth token on boot
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const user = await api.getMe();
+        if (user && user.email) {
+          setCurrentUser(user);
+          setCurrentRole(user.role as UserRole);
+        }
+      } catch (e) {
+        // Unauthenticated - default to guest / demo view
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // WebSocket Live Updates
   useEffect(() => {
     const unsubscribe = createWebSocketSubscriber((event, data) => {
       setIsWsConnected(true);
@@ -67,20 +86,61 @@ export function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const handleLoginSuccess = (user: User, role: UserRole) => {
+    setCurrentUser(user);
+    setCurrentRole(role);
+    
+    // Redirect directly to the appropriate stakeholder home view
+    if (role === 'PATIENT') {
+      setActiveTab('patient-search');
+    } else if (role === 'HOSPITAL_STAFF') {
+      setActiveTab('hospital-dashboard');
+    } else if (role === 'GOVT_ADMIN') {
+      setActiveTab('govt-overview');
+    }
+  };
+
+  const handleLogout = () => {
+    api.logout();
+    setCurrentUser(null);
+    setActiveTab('login');
+  };
+
+  const handleRoleChange = (role: UserRole) => {
+    setCurrentRole(role);
+    if (role === 'PATIENT') setActiveTab('patient-search');
+    else if (role === 'HOSPITAL_STAFF') setActiveTab('hospital-dashboard');
+    else if (role === 'GOVT_ADMIN') setActiveTab('govt-overview');
+  };
+
   return (
     <div className="app-container">
       {/* Dynamic Global Navbar */}
       <Navbar
         currentRole={currentRole}
-        onRoleChange={setCurrentRole}
+        currentUser={currentUser}
+        onRoleChange={handleRoleChange}
         activeTab={activeTab}
         onTabChange={setActiveTab}
         isWsConnected={isWsConnected}
         onOpenUssd={() => setIsUssdOpen(true)}
+        onOpenLogin={() => setActiveTab('login')}
+        onLogout={handleLogout}
       />
 
       {/* Main Dynamic View Area */}
       <main className="main-content">
+        {/* Dedicated Login / Portal Access View */}
+        {activeTab === 'login' && (
+          <LoginPage
+            onLoginSuccess={handleLoginSuccess}
+            onContinueAsGuest={() => {
+              setCurrentRole('PATIENT');
+              setActiveTab('patient-search');
+            }}
+          />
+        )}
+
         {/* Patient Portal Views */}
         {activeTab === 'patient-search' && <PatientPortal initialTab="search" />}
         {activeTab === 'patient-referral' && <PatientPortal initialTab="referral" />}
