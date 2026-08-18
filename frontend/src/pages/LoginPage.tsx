@@ -178,7 +178,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
           </span>
         </div>
         <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', letterSpacing: '-0.02em' }}>
-          {isRegistering ? 'Create Your Stakeholder Account' : 'Unified Stakeholder Portal Login'}
+          {isRegistering ? 'Create Your MedFlow Account' : 'Unified Healthcare Portal Login'}
         </h1>
         <p style={{ color: '#64748b', fontSize: '0.95rem', margin: 0 }}>
           Real-time bed forecasting, emergency smart referrals, and statewide medical resource command
@@ -653,7 +653,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
                     cursor: 'pointer'
                   }}
                 >
-                  Register New Stakeholder
+                  Create an Account
                 </button>
               </div>
             </div>
@@ -663,7 +663,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
               <form onSubmit={handleRegister}>
                 <div style={{ marginBottom: '14px' }}>
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                    Select Stakeholder Type
+                    Select Account Role
                   </label>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button

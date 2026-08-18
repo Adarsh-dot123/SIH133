@@ -49,7 +49,7 @@ def list_users():
         print(f"       -> Bcrypt Hash: {r['hashed_password'][:30]}...")
         print("-" * 95)
     
-    print(f"\nTotal Registered Stakeholder Accounts in Database: {len(rows)}")
+    print(f"\nTotal Registered User Accounts in Database: {len(rows)}")
     conn.close()
 
 def add_user(email, password, full_name, role, department=None, designation=None, abha_id=None, hospital_id=None, phone=None):
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     parser.add_argument("--email", help="User email")
     parser.add_argument("--password", help="User password")
     parser.add_argument("--name", help="Full name")
-    parser.add_argument("--role", choices=["PATIENT", "HOSPITAL_STAFF", "GOVT_ADMIN"], default="PATIENT", help="Stakeholder Role")
+    parser.add_argument("--role", choices=["PATIENT", "HOSPITAL_STAFF", "GOVT_ADMIN"], default="PATIENT", help="User Role")
     parser.add_argument("--dept", help="Department")
     parser.add_argument("--desig", help="Designation")
     parser.add_argument("--abha", help="ABHA ID")

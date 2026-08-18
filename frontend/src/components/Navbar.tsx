@@ -216,7 +216,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   fontWeight: 600,
                   marginLeft: '4px'
                 }}
-                title="Sign Out / Switch Stakeholder Account"
+                title="Sign Out / Switch Account"
               >
                 <LogOut size={13} />
                 <span>Exit</span>

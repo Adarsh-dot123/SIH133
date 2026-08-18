@@ -77,7 +77,7 @@ export const AccessDeniedView: React.FC<AccessDeniedViewProps> = ({
 
       <p style={{ color: '#64748b', fontSize: '0.95rem', lineHeight: 1.6, margin: '0 auto 28px auto', maxWidth: '520px' }}>
         You are currently authenticated as <strong>{currentUser ? currentUser.full_name : 'Guest'}</strong> (Role: <span style={{ color: '#0f172a', fontWeight: 700 }}>{currentRole}</span>). 
-        To ensure patient privacy, clinical safety, and governmental security, each stakeholder may only access their designated portal.
+        To ensure patient privacy, clinical safety, and governmental security, each user role may only access its designated portal.
       </p>
 
       {/* Access Comparison Grid */}
