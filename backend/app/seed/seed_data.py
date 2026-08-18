@@ -423,9 +423,40 @@ def seed_database():
 
         print("Seeding Users for Demo...")
         users = [
-            {"email": "patient@medflow.in", "pass": "patient123", "name": "Rohan Sharma (Patient)", "role": UserRole.PATIENT, "hosp_id": None},
-            {"email": "staff@medflow.in", "pass": "staff123", "name": "Dr. Priya Selvam (Hospital Staff)", "role": UserRole.HOSPITAL_STAFF, "hosp_id": hosp_objs[0].id},
-            {"email": "admin@medflow.in", "pass": "admin123", "name": "Dr. K. Radhakrishnan (District Collector & Admin)", "role": UserRole.GOVT_ADMIN, "hosp_id": None},
+            # 1. Patients
+            {
+                "email": "patient@medflow.in", "pass": "patient123", "name": "Rohan Sharma (Patient)",
+                "role": UserRole.PATIENT, "hosp_id": None, "dept": "General Patient",
+                "desig": "Ayushman Bharat Beneficiary", "abha": "14-8921-4456-7890", "phone": "+91 98401 22334"
+            },
+            {
+                "email": "ananya.rao@medflow.in", "pass": "patient123", "name": "Ananya Rao (Patient)",
+                "role": UserRole.PATIENT, "hosp_id": None, "dept": "Cardiology Outpatient",
+                "desig": "CGHS Empanelled Citizen", "abha": "14-3312-7788-9900", "phone": "+91 98402 33445"
+            },
+            # 2. Hospital Staff & Doctors
+            {
+                "email": "staff@medflow.in", "pass": "staff123", "name": "Dr. Priya Selvam (Hospital Staff)",
+                "role": UserRole.HOSPITAL_STAFF, "hosp_id": hosp_objs[0].id, "dept": "Critical Care / ICU",
+                "desig": "Senior Consultant Intensivist", "abha": "14-1122-3344-5566", "phone": "+91 98401 11223"
+            },
+            {
+                "email": "staff.cmc@medflow.in", "pass": "staff123", "name": "Dr. Anand Verghese (CMC Vellore)",
+                "role": UserRole.HOSPITAL_STAFF, "hosp_id": hosp_objs[6].id if len(hosp_objs) > 6 else hosp_objs[0].id,
+                "dept": "Emergency & Trauma Medicine", "desig": "Chief Medical Officer",
+                "abha": "14-5566-7788-9911", "phone": "+91 98405 55667"
+            },
+            # 3. Government & District Administrators
+            {
+                "email": "admin@medflow.in", "pass": "admin123", "name": "Dr. K. Radhakrishnan (District Collector)",
+                "role": UserRole.GOVT_ADMIN, "hosp_id": None, "dept": "District Health & Disaster Management",
+                "desig": "District Collector & Special Officer", "abha": None, "phone": "+91 98400 99887"
+            },
+            {
+                "email": "admin.state@medflow.in", "pass": "admin123", "name": "Dr. S. J. Kumar (State Health Mission)",
+                "role": UserRole.GOVT_ADMIN, "hosp_id": None, "dept": "State Health Resource Directorate",
+                "desig": "Mission Director, NHM Tamil Nadu", "abha": None, "phone": "+91 98400 11001"
+            },
         ]
         for u in users:
             user = User(
@@ -434,7 +465,12 @@ def seed_database():
                 full_name=u["name"],
                 role=u["role"],
                 hospital_id=u["hosp_id"],
-                phone="+91 98400 12345"
+                department=u["dept"],
+                designation=u["desig"],
+                abha_id=u["abha"],
+                phone=u["phone"],
+                is_active=True,
+                created_at=datetime.datetime.utcnow()
             )
             db.add(user)
 

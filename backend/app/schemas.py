@@ -23,6 +23,9 @@ class UserCreate(BaseModel):
     role: str = "PATIENT"
     hospital_id: Optional[int] = None
     phone: Optional[str] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    abha_id: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: int
@@ -31,6 +34,11 @@ class UserResponse(BaseModel):
     role: str
     hospital_id: Optional[int] = None
     phone: Optional[str] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    abha_id: Optional[str] = None
+    is_active: bool = True
+    created_at: Optional[datetime.datetime] = None
 
     class Config:
         from_attributes = True

@@ -36,12 +36,18 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(120), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=False) # Bcrypt hashed
     full_name = Column(String(120), nullable=False)
     role = Column(String(30), default=UserRole.PATIENT, nullable=False)
     hospital_id = Column(Integer, ForeignKey("hospitals.id"), nullable=True)
+    department = Column(String(100), nullable=True)
+    designation = Column(String(100), nullable=True)
+    abha_id = Column(String(50), unique=True, index=True, nullable=True) # 14-digit ABHA ID
     phone = Column(String(20), nullable=True)
+    is_active = Column(Boolean, default=True)
+    last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     hospital = relationship("Hospital", back_populates="staff_users")
 

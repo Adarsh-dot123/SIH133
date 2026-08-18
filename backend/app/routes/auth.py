@@ -65,11 +65,18 @@ def require_role(allowed_roles: list):
         return current_user
     return role_checker
 
+from app.services.audit_service import audit_service
+
 @router.post("/register", response_model=UserResponse)
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == user_in.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
+    
+    if user_in.abha_id:
+        existing_abha = db.query(User).filter(User.abha_id == user_in.abha_id).first()
+        if existing_abha:
+            raise HTTPException(status_code=400, detail="ABHA ID already linked to an account")
     
     user = User(
         email=user_in.email,
@@ -77,18 +84,48 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         full_name=user_in.full_name,
         role=user_in.role,
         hospital_id=user_in.hospital_id,
-        phone=user_in.phone
+        department=user_in.department,
+        designation=user_in.designation,
+        abha_id=user_in.abha_id,
+        phone=user_in.phone,
+        is_active=True,
+        created_at=datetime.datetime.utcnow()
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # Log to Blockchain Audit Trail
+    audit_service.log_action(
+        db=db,
+        actor_email=user.email,
+        actor_role=user.role,
+        action="USER_REGISTRATION",
+        resource_type="USER",
+        resource_id=str(user.id),
+        previous_value="N/A",
+        new_value=f"Registered {user.full_name} ({user.role})",
+        hospital_id=user.hospital_id
+    )
+
     return user
 
 @router.post("/login", response_model=Token)
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == credentials.email).first()
+    # Support searching by email or ABHA ID
+    user = db.query(User).filter(
+        (User.email == credentials.email) | (User.abha_id == credentials.email)
+    ).first()
+    
     if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is deactivated. Contact system administrator.")
+    
+    # Update last login timestamp
+    user.last_login = datetime.datetime.utcnow()
+    db.commit()
     
     token = create_access_token(data={"sub": user.email, "role": user.role, "id": user.id})
     return {
@@ -100,6 +137,9 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
             "full_name": user.full_name,
             "role": user.role,
             "hospital_id": user.hospital_id,
+            "department": user.department,
+            "designation": user.designation,
+            "abha_id": user.abha_id,
             "phone": user.phone
         }
     }

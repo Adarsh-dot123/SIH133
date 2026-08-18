@@ -24,10 +24,13 @@ for r in c.execute("SELECT id, name, address, district_id, specialties_json, is_
 
 # 3. Demo Users
 print("\n" + "=" * 60)
-print("DEMO USER ACCOUNTS")
+print("DEMO & REGISTERED USER ACCOUNTS")
 print("=" * 60)
-for r in c.execute("SELECT email, role, full_name FROM users").fetchall():
-    print(f"  {r['email']:30s} Role: {r['role']:15s} Name: {r['full_name']}")
+for r in c.execute("SELECT id, email, role, full_name, department, designation, abha_id, hashed_password FROM users").fetchall():
+    abha_str = f" | ABHA: {r['abha_id']}" if r['abha_id'] else ""
+    print(f"  [ID {r['id']}] {r['email']:25s} | Role: {r['role']:15s} | Name: {r['full_name']}")
+    print(f"         Dept: {r['department'] or 'General'} | Desig: {r['designation'] or '-'}{abha_str}")
+    print(f"         Password Hash: {r['hashed_password'][:28]}... (Bcrypt salted)")
 
 # 4. Districts
 print("\n" + "=" * 60)
