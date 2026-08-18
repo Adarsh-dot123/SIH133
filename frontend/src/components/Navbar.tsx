@@ -2,7 +2,7 @@ import React from 'react';
 import { UserRole, User as UserType } from '../types';
 import { 
   Activity, ShieldCheck, PhoneCall, Building2, User, Landmark, 
-  Cpu, Link2, Sparkles, Radio, LogIn, LogOut, KeyRound
+  Cpu, Link2, Sparkles, Radio, LogIn, LogOut, Lock
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -32,7 +32,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="navbar">
       <div className="navbar-inner">
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <a href="#" className="brand-logo" onClick={(e) => { e.preventDefault(); onTabChange(currentRole === 'PATIENT' ? 'patient-search' : currentRole === 'HOSPITAL_STAFF' ? 'hospital-dashboard' : 'govt-overview'); }}>
+          <a href="#" className="brand-logo" onClick={(e) => { 
+            e.preventDefault(); 
+            onTabChange(currentRole === 'PATIENT' ? 'patient-search' : currentRole === 'HOSPITAL_STAFF' ? 'hospital-dashboard' : 'govt-overview'); 
+          }}>
             <div style={{
               width: '36px', height: '36px', borderRadius: '10px',
               background: 'linear-gradient(135deg, #0d9488, #4f46e5)',
@@ -61,7 +64,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Dynamic Navigation Links based on role */}
+        {/* Dynamic Navigation Links strictly enforced per active role */}
         <nav className="nav-links">
           {currentRole === 'PATIENT' && (
             <>
@@ -144,40 +147,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </nav>
 
-        {/* Stakeholder Role Switcher & Auth Profile */}
+        {/* Stakeholder Role Badge & Account Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Quick Role Switcher */}
-          <div className="role-switcher">
-            <button
-              className={`role-btn ${currentRole === 'PATIENT' ? 'active' : ''}`}
-              onClick={() => {
-                onRoleChange('PATIENT');
-                onTabChange('patient-search');
-              }}
-              title="Switch Persona to Patient"
-            >
-              <User size={13} /> Patient
-            </button>
-            <button
-              className={`role-btn ${currentRole === 'HOSPITAL_STAFF' ? 'active' : ''}`}
-              onClick={() => {
-                onRoleChange('HOSPITAL_STAFF');
-                onTabChange('hospital-dashboard');
-              }}
-              title="Switch Persona to Hospital Staff"
-            >
-              <Building2 size={13} /> Staff
-            </button>
-            <button
-              className={`role-btn ${currentRole === 'GOVT_ADMIN' ? 'active' : ''}`}
-              onClick={() => {
-                onRoleChange('GOVT_ADMIN');
-                onTabChange('govt-overview');
-              }}
-              title="Switch Persona to Govt Admin"
-            >
-              <Landmark size={13} /> Govt
-            </button>
+          {/* Active Role Indicator */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            background: currentRole === 'PATIENT' ? '#f0fdfa' : currentRole === 'HOSPITAL_STAFF' ? '#eff6ff' : '#f5f3ff',
+            border: `1px solid ${currentRole === 'PATIENT' ? '#ccfbf1' : currentRole === 'HOSPITAL_STAFF' ? '#dbeafe' : '#ede9fe'}`,
+            padding: '4px 10px',
+            borderRadius: '9999px',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            color: currentRole === 'PATIENT' ? '#0d9488' : currentRole === 'HOSPITAL_STAFF' ? '#2563eb' : '#7c3aed'
+          }}>
+            <Lock size={12} />
+            <span>
+              {currentRole === 'PATIENT' ? 'Patient Portal' : currentRole === 'HOSPITAL_STAFF' ? 'Hospital Staff Portal' : 'Govt Command Portal'}
+            </span>
           </div>
 
           {/* User Account / Login State */}
@@ -218,15 +206,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: '#ef4444',
                   cursor: 'pointer',
-                  padding: '2px',
+                  padding: '2px 4px',
                   display: 'flex',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  marginLeft: '4px'
                 }}
-                title="Sign Out"
+                title="Sign Out / Switch Stakeholder Account"
               >
-                <LogOut size={14} />
+                <LogOut size={13} />
+                <span>Exit</span>
               </button>
             </div>
           ) : (
@@ -244,7 +237,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
             >
               <LogIn size={14} />
-              <span>Sign In</span>
+              <span>Sign In / Switch Role</span>
             </button>
           )}
         </div>

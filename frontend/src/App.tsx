@@ -3,6 +3,7 @@ import { UserRole, User } from './types';
 import { Navbar } from './components/Navbar';
 import { NotificationToast, ToastMessage } from './components/NotificationToast';
 import { UssdSimulatorModal } from './components/UssdSimulatorModal';
+import { AccessDeniedView } from './components/AccessDeniedView';
 import { LoginPage } from './pages/LoginPage';
 import { PatientPortal } from './pages/PatientPortal';
 import { HospitalPortal } from './pages/HospitalPortal';
@@ -12,6 +13,19 @@ import { IoTMonitorPage } from './pages/IoTMonitorPage';
 import { AuditTrailPage } from './pages/AuditTrailPage';
 import { ABDMAdapterPage } from './pages/ABDMAdapterPage';
 import { api, createWebSocketSubscriber } from './api/client';
+
+// Strict Role-Based Access Control mapping
+const ROLE_ALLOWED_TABS: Record<UserRole, string[]> = {
+  PATIENT: ['patient-search', 'patient-referral', 'login'],
+  HOSPITAL_STAFF: ['hospital-dashboard', 'clinical-turnover', 'abdm-hub', 'login'],
+  GOVT_ADMIN: ['govt-overview', 'digital-twin', 'iot-monitor', 'audit-trail', 'login'],
+};
+
+const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
+  PATIENT: 'patient-search',
+  HOSPITAL_STAFF: 'hospital-dashboard',
+  GOVT_ADMIN: 'govt-overview',
+};
 
 export function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('PATIENT');
@@ -28,10 +42,12 @@ export function App() {
         const user = await api.getMe();
         if (user && user.email) {
           setCurrentUser(user);
-          setCurrentRole(user.role as UserRole);
+          const role = user.role as UserRole;
+          setCurrentRole(role);
+          setActiveTab(ROLE_DEFAULT_TAB[role] || 'patient-search');
         }
       } catch (e) {
-        // Unauthenticated - default to guest / demo view
+        // Unauthenticated - default to Patient portal
       }
     };
     checkAuth();
@@ -89,15 +105,7 @@ export function App() {
   const handleLoginSuccess = (user: User, role: UserRole) => {
     setCurrentUser(user);
     setCurrentRole(role);
-    
-    // Redirect directly to the appropriate stakeholder home view
-    if (role === 'PATIENT') {
-      setActiveTab('patient-search');
-    } else if (role === 'HOSPITAL_STAFF') {
-      setActiveTab('hospital-dashboard');
-    } else if (role === 'GOVT_ADMIN') {
-      setActiveTab('govt-overview');
-    }
+    setActiveTab(ROLE_DEFAULT_TAB[role]);
   };
 
   const handleLogout = () => {
@@ -107,15 +115,17 @@ export function App() {
   };
 
   const handleRoleChange = (role: UserRole) => {
+    // When changing role, route to allowed tab for that role or login
     setCurrentRole(role);
-    if (role === 'PATIENT') setActiveTab('patient-search');
-    else if (role === 'HOSPITAL_STAFF') setActiveTab('hospital-dashboard');
-    else if (role === 'GOVT_ADMIN') setActiveTab('govt-overview');
+    setActiveTab(ROLE_DEFAULT_TAB[role]);
   };
+
+  // Check if current tab is permitted for current role
+  const isTabPermitted = activeTab === 'login' || (ROLE_ALLOWED_TABS[currentRole] && ROLE_ALLOWED_TABS[currentRole].includes(activeTab));
 
   return (
     <div className="app-container">
-      {/* Dynamic Global Navbar */}
+      {/* Dynamic Global Navbar with strict RBAC */}
       <Navbar
         currentRole={currentRole}
         currentUser={currentUser}
@@ -128,7 +138,7 @@ export function App() {
         onLogout={handleLogout}
       />
 
-      {/* Main Dynamic View Area */}
+      {/* Main View Area with RBAC Enforcement */}
       <main className="main-content">
         {/* Dedicated Login / Portal Access View */}
         {activeTab === 'login' && (
@@ -141,20 +151,31 @@ export function App() {
           />
         )}
 
-        {/* Patient Portal Views */}
-        {activeTab === 'patient-search' && <PatientPortal initialTab="search" />}
-        {activeTab === 'patient-referral' && <PatientPortal initialTab="referral" />}
+        {/* RBAC Violation Guard: If tab is not permitted for this role, show AccessDeniedView */}
+        {!isTabPermitted && activeTab !== 'login' && (
+          <AccessDeniedView
+            currentRole={currentRole}
+            currentUser={currentUser}
+            attemptedTab={activeTab}
+            onGoToAllowedPortal={() => setActiveTab(ROLE_DEFAULT_TAB[currentRole])}
+            onOpenLogin={() => setActiveTab('login')}
+          />
+        )}
 
-        {/* Hospital Staff Views */}
-        {activeTab === 'hospital-dashboard' && <HospitalPortal />}
-        {activeTab === 'clinical-turnover' && <HospitalPortal />}
-        {activeTab === 'abdm-hub' && <ABDMAdapterPage />}
+        {/* Patient Portal Views (PATIENT ONLY) */}
+        {isTabPermitted && activeTab === 'patient-search' && <PatientPortal initialTab="search" />}
+        {isTabPermitted && activeTab === 'patient-referral' && <PatientPortal initialTab="referral" />}
 
-        {/* Government Command Center Views */}
-        {activeTab === 'govt-overview' && <GovtCommandCenter />}
-        {activeTab === 'digital-twin' && <DigitalTwinPage />}
-        {activeTab === 'iot-monitor' && <IoTMonitorPage />}
-        {activeTab === 'audit-trail' && <AuditTrailPage />}
+        {/* Hospital Staff Views (HOSPITAL_STAFF ONLY) */}
+        {isTabPermitted && activeTab === 'hospital-dashboard' && <HospitalPortal />}
+        {isTabPermitted && activeTab === 'clinical-turnover' && <HospitalPortal />}
+        {isTabPermitted && activeTab === 'abdm-hub' && <ABDMAdapterPage />}
+
+        {/* Government Command Center Views (GOVT_ADMIN ONLY) */}
+        {isTabPermitted && activeTab === 'govt-overview' && <GovtCommandCenter />}
+        {isTabPermitted && activeTab === 'digital-twin' && <DigitalTwinPage />}
+        {isTabPermitted && activeTab === 'iot-monitor' && <IoTMonitorPage />}
+        {isTabPermitted && activeTab === 'audit-trail' && <AuditTrailPage />}
       </main>
 
       {/* Real-time WebSocket Toasts */}
