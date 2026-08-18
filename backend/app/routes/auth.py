@@ -1,4 +1,5 @@
 import datetime
+from typing import List, Optional
 import jwt
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -108,7 +109,27 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         hospital_id=user.hospital_id
     )
 
+    # Broadcast WebSocket Event
+    try:
+        from app.routes.ws import manager
+        import asyncio
+        asyncio.create_task(manager.broadcast("USER_REGISTERED", {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role,
+            "department": user.department,
+            "hospital_id": user.hospital_id
+        }))
+    except Exception:
+        pass
+
     return user
+
+@router.get("/users", response_model=List[UserResponse])
+def get_all_users(db: Session = Depends(get_db)):
+    """Fetch all registered users from database for directory and admin audit"""
+    return db.query(User).order_by(User.id.desc()).all()
 
 @router.post("/login", response_model=Token)
 def login(credentials: UserLogin, db: Session = Depends(get_db)):

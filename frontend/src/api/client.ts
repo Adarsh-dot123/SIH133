@@ -56,7 +56,17 @@ class ApiClient {
     return res;
   }
 
-  async register(data: { email: string; password: string; full_name: string; role: string; hospital_id?: number | null; phone?: string }) {
+  async register(data: {
+    email: string;
+    password: string;
+    full_name: string;
+    role: string;
+    hospital_id?: number | null;
+    phone?: string;
+    department?: string;
+    designation?: string;
+    abha_id?: string;
+  }) {
     return this.request<any>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -65,6 +75,10 @@ class ApiClient {
 
   async getMe() {
     return this.request<any>('/auth/me');
+  }
+
+  async getUsers() {
+    return this.request<any[]>('/auth/users');
   }
 
   logout() {
