@@ -378,20 +378,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
                   </div>
                 </div>
 
-                {regRole !== 'GOVT_ADMIN' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: regRole === 'PATIENT' ? '1fr 1fr' : '1fr', gap: '10px', marginBottom: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>Department / Ward</label>
-                      <input type="text" value={regDepartment} onChange={(e) => setRegDepartment(e.target.value)} placeholder="e.g. Cardiology"
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', boxSizing: 'border-box' }} />
-                    </div>
-                    {regRole === 'PATIENT' && (
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>ABHA ID (optional)</label>
-                        <input type="text" value={regAbhaId} onChange={(e) => setRegAbhaId(e.target.value)} placeholder="14-XXXX-XXXX-XXXX"
-                          style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', boxSizing: 'border-box' }} />
-                      </div>
-                    )}
+                {regRole === 'HOSPITAL_STAFF' && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>Department / Ward</label>
+                    <input type="text" value={regDepartment} onChange={(e) => setRegDepartment(e.target.value)} placeholder="e.g. Cardiology, ICU, Emergency"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                  </div>
+                )}
+
+                {regRole === 'PATIENT' && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                      ABHA ID <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span>
+                    </label>
+                    <input type="text" value={regAbhaId} onChange={(e) => setRegAbhaId(e.target.value)} placeholder="14-XXXX-XXXX-XXXX"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', boxSizing: 'border-box', fontFamily: 'monospace' }} />
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>Link your Ayushman Bharat Health Account for ABDM-enabled services</div>
                   </div>
                 )}
 
