@@ -25,41 +25,80 @@ def compute_district_metrics(dist: District) -> dict:
     critical_hosps = 0
 
     for h in hospitals:
+        h_total_beds = len(h.beds)
+        h_occupied_beds = 0
+        h_icu = 0
+        h_avail_icu = 0
+        h_vent = 0
+        h_avail_vent = 0
+
         for b in h.beds:
             total_beds += 1
             if b.status in ["OCCUPIED", "RESERVED"]:
                 occupied_beds += 1
+                h_occupied_beds += 1
             
             if "ICU" in b.bed_type:
                 total_icu += 1
+                h_icu += 1
                 if b.status == "AVAILABLE":
                     avail_icu += 1
+                    h_avail_icu += 1
             
             if b.bed_type == "VENTILATOR":
                 total_vent += 1
+                h_vent += 1
                 if b.status == "AVAILABLE":
                     avail_vent += 1
+                    h_avail_vent += 1
 
+        h_o2_days = 999.0
         if h.oxygen_inventory:
             days = h.oxygen_inventory.bulk_tank_current_kl / max(h.oxygen_inventory.daily_consumption_kl, 0.1)
             o2_days_list.append(days)
+            h_o2_days = days
 
-        # Check critical condition
-        hosp_icu = sum(1 for b in h.beds if "ICU" in b.bed_type)
-        hosp_avail_icu = sum(1 for b in h.beds if "ICU" in b.bed_type and b.status == "AVAILABLE")
-        if hosp_icu > 0 and (hosp_avail_icu / hosp_icu) <= 0.10:
+        # Dynamic Hospital-Level Criticality Check
+        hosp_is_critical = False
+        if h_icu > 0 and (h_avail_icu == 0 or (h_avail_icu / h_icu) <= 0.10):
+            hosp_is_critical = True
+        elif h_total_beds > 0 and (h_occupied_beds / h_total_beds >= 0.90 or (h_total_beds - h_occupied_beds) == 0):
+            hosp_is_critical = True
+        elif h_vent > 0 and h_avail_vent == 0:
+            hosp_is_critical = True
+        elif h_o2_days < 2.0:
+            hosp_is_critical = True
+            
+        if hosp_is_critical:
             critical_hosps += 1
 
-    occupancy_pct = round((occupied_beds / max(total_beds, 1)) * 100.0, 1)
-    icu_occ_pct = round(((total_icu - avail_icu) / max(total_icu, 1)) * 100.0, 1)
-    avg_o2 = round(sum(o2_days_list) / max(len(o2_days_list), 1), 1)
+    occupancy_pct = round((occupied_beds / max(total_beds, 1)) * 100.0, 1) if total_beds > 0 else 100.0
+    icu_occ_pct = round(((total_icu - avail_icu) / max(total_icu, 1)) * 100.0, 1) if total_icu > 0 else 100.0
+    avg_o2 = round(sum(o2_days_list) / max(len(o2_days_list), 1), 1) if o2_days_list else 0.0
 
-    # Determine district alert status
+    # Dynamic District Alert Status Evaluation
     alert_status = "NORMAL"
-    if total_icu > 0 and (avail_icu / total_icu) <= 0.10:
+    if total_hosps == 0 or total_beds == 0:
+        # Zero healthcare infrastructure for populated district = CRITICAL coverage deficit
         alert_status = "CRITICAL"
-    elif total_icu > 0 and (avail_icu / total_icu) <= 0.25:
+    elif total_icu > 0 and (avail_icu == 0 or (avail_icu / total_icu) <= 0.10):
+        # District ICU capacity exhausted (<= 10% or 0 available)
+        alert_status = "CRITICAL"
+    elif occupancy_pct >= 90.0 or (total_beds - occupied_beds) == 0:
+        # General bed capacity saturated
+        alert_status = "CRITICAL"
+    elif critical_hosps > 0:
+        # Any hospital in the district in critical condition triggers district-wide alert
+        alert_status = "CRITICAL"
+    elif avg_o2 > 0 and avg_o2 <= 2.5:
+        # Severe oxygen buffer depletion
+        alert_status = "CRITICAL"
+    elif (total_icu > 0 and (avail_icu / total_icu) <= 0.25) or occupancy_pct >= 80.0 or (0 < avg_o2 <= 4.0):
         alert_status = "WARNING"
+
+    # Synchronize database district status dynamically
+    if dist.alert_status != alert_status:
+        dist.alert_status = alert_status
 
     return {
         "district_id": dist.id,

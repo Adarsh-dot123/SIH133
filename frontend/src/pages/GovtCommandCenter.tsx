@@ -1,16 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Landmark, AlertTriangle, ShieldCheck, ArrowRight, RefreshCw,
-  TrendingDown, CheckCircle, Activity, MapPin, Building, Share2
+  TrendingDown, CheckCircle, Activity, MapPin, Building, Share2,
+  Wifi, WifiOff, Clock
 } from 'lucide-react';
 import { GovtCommandOverview, DistrictAlert, DistrictOverviewItem } from '../types';
-import { api } from '../api/client';
+import { api, createWebSocketSubscriber } from '../api/client';
 
 export const GovtCommandCenter: React.FC = () => {
   const [overview, setOverview] = useState<GovtCommandOverview | null>(null);
   const [alerts, setAlerts] = useState<DistrictAlert[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictOverviewItem | null>(null);
+  const [isLiveSync, setIsLiveSync] = useState<boolean>(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Reallocation modal state
   const [isReallocating, setIsReallocating] = useState<boolean>(false);
@@ -20,12 +24,8 @@ export const GovtCommandCenter: React.FC = () => {
   const [quantity, setQuantity] = useState<number>(50);
   const [reallocationSuccess, setReallocationSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadGovtData();
-  }, []);
-
-  const loadGovtData = async () => {
-    setIsLoading(true);
+  const loadGovtData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const [ov, al] = await Promise.all([
         api.getAdminOverview(),
@@ -33,8 +33,13 @@ export const GovtCommandCenter: React.FC = () => {
       ]);
       setOverview(ov);
       setAlerts(al);
-      if (ov.districts.length > 0 && !selectedDistrict) {
-        setSelectedDistrict(ov.districts[0]);
+      setLastUpdated(new Date());
+      if (ov.districts.length > 0) {
+        setSelectedDistrict((prev) => {
+          if (!prev) return ov.districts[0];
+          const updated = ov.districts.find(d => d.district_id === prev.district_id);
+          return updated || ov.districts[0];
+        });
       }
     } catch (err) {
       console.error('Failed to load Govt overview', err);
@@ -42,6 +47,33 @@ export const GovtCommandCenter: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Real-time WebSocket sync & periodic polling
+  useEffect(() => {
+    loadGovtData();
+
+    // 1. WebSocket real-time subscription for immediate updates
+    const unsubscribe = createWebSocketSubscriber((event) => {
+      if ([
+        'BED_STATUS_CHANGED', 'BED_OCCUPIED', 'BED_VACATED', 'BED_STATUS_TOGGLED',
+        'IOT_TELEMETRY', 'DISTRICT_ALERT_TRIGGERED', 'RESOURCE_REALLOCATION_DISPATCHED'
+      ].includes(event)) {
+        loadGovtData(true);
+      }
+    });
+
+    // 2. 5-second dynamic polling
+    if (isLiveSync) {
+      pollingRef.current = setInterval(() => {
+        loadGovtData(true);
+      }, 5000);
+    }
+
+    return () => {
+      unsubscribe();
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [isLiveSync]);
 
   const handleTriggerReallocation = async () => {
     try {
@@ -82,8 +114,27 @@ export const GovtCommandCenter: React.FC = () => {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={loadGovtData} className="btn btn-secondary btn-sm">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {lastUpdated && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: '#94a3b8' }}>
+              <Clock size={13} />
+              <span>Updated {lastUpdated.toLocaleTimeString()}</span>
+            </div>
+          )}
+          <button
+            onClick={() => setIsLiveSync(s => !s)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
+              background: isLiveSync ? '#f0fdf4' : '#fef2f2',
+              color: isLiveSync ? '#16a34a' : '#dc2626',
+              fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            {isLiveSync ? <Wifi size={13} /> : <WifiOff size={13} />}
+            {isLiveSync ? 'Live Sync Active (5s)' : 'Live Sync Paused'}
+          </button>
+          <button onClick={() => loadGovtData(false)} className="btn btn-secondary btn-sm">
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} /> Refresh Feeds
           </button>
           <button onClick={() => setIsReallocating(true)} className="btn btn-primary btn-sm">
@@ -134,11 +185,16 @@ export const GovtCommandCenter: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         {/* District Surveillance Heatmap Matrix */}
         <div className="card">
-          <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>
-            District Heatmap Surveillance Matrix
-          </h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              District Heatmap Surveillance Matrix
+            </h2>
+            <span style={{ fontSize: '0.72rem', background: '#f1f5f9', color: '#475569', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
+              Auto-Calculated
+            </span>
+          </div>
           <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '16px' }}>
-            Flagged automatically when district ICU capacity drops below <strong>10%</strong> or oxygen falls below 3 days buffer.
+            Dynamically flags <strong>CRITICAL</strong> on zero hospital coverage, ICU capacity ≤ 10%, critical hospital surge, or oxygen depletion.
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -146,6 +202,20 @@ export const GovtCommandCenter: React.FC = () => {
               const isCrit = dist.alert_status === 'CRITICAL';
               const isWarn = dist.alert_status === 'WARNING';
               const isSelected = selectedDistrict?.district_id === dist.district_id;
+              
+              // Critical reason label
+              let reasonLabel = '';
+              if (dist.total_hospitals === 0 || dist.total_beds === 0) {
+                reasonLabel = 'Coverage Desert (0 Hosp)';
+              } else if (dist.critical_hospitals_count > 0) {
+                reasonLabel = `${dist.critical_hospitals_count} Hosp Critical`;
+              } else if (dist.total_icu > 0 && dist.available_icu === 0) {
+                reasonLabel = '0 ICU Left';
+              } else if (dist.occupancy_pct >= 90) {
+                reasonLabel = 'Bed Saturated (>90%)';
+              } else if (dist.avg_oxygen_days > 0 && dist.avg_oxygen_days <= 2.5) {
+                reasonLabel = 'Oxygen Deficit';
+              }
 
               return (
                 <div
@@ -159,45 +229,52 @@ export const GovtCommandCenter: React.FC = () => {
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0f172a' }}>
+                      <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
                         {dist.district_name} <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>({dist.state})</span>
                       </h4>
                       <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
-                        Population: {(dist.population / 100000).toFixed(1)} Lakhs • {dist.total_hospitals} Hospitals
+                        Population: {(dist.population / 100000).toFixed(1)} Lakhs • {dist.total_hospitals} Hospitals • {dist.total_beds} Total Beds
                       </div>
                     </div>
 
-                    <span style={{
-                      fontSize: '0.72rem', fontWeight: 800, padding: '3px 10px', borderRadius: '9999px',
-                      background: isCrit ? '#e11d48' : isWarn ? '#d97706' : '#059669',
-                      color: '#ffffff'
-                    }}>
-                      {dist.alert_status}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <span style={{
+                        fontSize: '0.72rem', fontWeight: 800, padding: '3px 10px', borderRadius: '9999px',
+                        background: isCrit ? '#e11d48' : isWarn ? '#d97706' : '#059669',
+                        color: '#ffffff'
+                      }}>
+                        {dist.alert_status}
+                      </span>
+                      {reasonLabel && (
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: isCrit ? '#be123c' : '#b45309', background: '#ffffff', padding: '1px 6px', borderRadius: '4px', border: `1px solid ${isCrit ? '#fecdd3' : '#fde68a'}` }}>
+                          {reasonLabel}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* District Resource Bars */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '10px' }}>
                     <div style={{ background: '#ffffff', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                       <div style={{ fontSize: '0.65rem', color: '#64748b' }}>ICU Available</div>
-                      <div style={{ fontSize: '0.88rem', fontWeight: 800, color: dist.available_icu > 0 ? '#059669' : '#e11d48' }}>
-                        {dist.available_icu} / {dist.total_icu}
+                      <div style={{ fontSize: '0.88rem', fontWeight: 800, color: dist.total_icu === 0 ? '#94a3b8' : dist.available_icu > 0 ? '#059669' : '#e11d48' }}>
+                        {dist.total_icu === 0 ? 'N/A (0 ICU)' : `${dist.available_icu} / ${dist.total_icu}`}
                       </div>
                     </div>
 
                     <div style={{ background: '#ffffff', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                       <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Occupancy %</div>
-                      <div style={{ fontSize: '0.88rem', fontWeight: 800, color: dist.occupancy_pct > 85 ? '#e11d48' : '#0f172a' }}>
-                        {dist.occupancy_pct}%
+                      <div style={{ fontSize: '0.88rem', fontWeight: 800, color: dist.total_beds === 0 ? '#e11d48' : dist.occupancy_pct > 85 ? '#e11d48' : '#0f172a' }}>
+                        {dist.total_beds === 0 ? '100% (No Beds)' : `${dist.occupancy_pct}%`}
                       </div>
                     </div>
 
                     <div style={{ background: '#ffffff', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                       <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Avg Oxygen</div>
                       <div style={{ fontSize: '0.88rem', fontWeight: 800, color: dist.avg_oxygen_days <= 3 ? '#e11d48' : '#0d9488' }}>
-                        {dist.avg_oxygen_days} Days
+                        {dist.avg_oxygen_days > 0 ? `${dist.avg_oxygen_days} Days` : '0 Days'}
                       </div>
                     </div>
                   </div>

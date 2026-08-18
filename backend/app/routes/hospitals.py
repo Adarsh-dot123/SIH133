@@ -33,19 +33,30 @@ def build_hospital_summary(hosp: Hospital) -> dict:
     current_free = {"GENERAL": gen_avail, "ICU": icu_avail, "VENTILATOR": vent_avail}
     forecast = ml_engine.aggregate_hospital_forecast(current_free, active_stays)
 
-    # Status Determination
+    # Dynamic Hospital Criticality Determination
+    total_all_beds = gen_total + icu_total + vent_total + o2_total
+    avail_all_beds = gen_avail + icu_avail + vent_avail + o2_avail
+    
     status = "NORMAL"
-    if icu_total > 0 and (icu_avail / icu_total) <= 0.10:
+    if (icu_total > 0 and (icu_avail == 0 or (icu_avail / icu_total) <= 0.10)):
         status = "CRITICAL"
-    elif icu_total > 0 and (icu_avail / icu_total) <= 0.25:
+    elif total_all_beds > 0 and (avail_all_beds == 0 or (avail_all_beds / total_all_beds) <= 0.10):
+        status = "CRITICAL"
+    elif vent_total > 0 and vent_avail == 0:
+        status = "CRITICAL"
+    elif (icu_total > 0 and (icu_avail / icu_total) <= 0.25) or (total_all_beds > 0 and (avail_all_beds / total_all_beds) <= 0.20):
         status = "WARNING"
 
     o2_status = "ADEQUATE"
     if hosp.oxygen_inventory:
-        if hosp.oxygen_inventory.bulk_tank_current_kl <= 3.0:
+        days_left = hosp.oxygen_inventory.bulk_tank_current_kl / max(hosp.oxygen_inventory.daily_consumption_kl, 0.1)
+        if hosp.oxygen_inventory.bulk_tank_current_kl <= 3.0 or days_left <= 2.0:
             o2_status = "CRITICAL"
-        elif hosp.oxygen_inventory.bulk_tank_current_kl <= 6.0:
+            status = "CRITICAL" # oxygen critical forces hospital critical
+        elif hosp.oxygen_inventory.bulk_tank_current_kl <= 6.0 or days_left <= 3.5:
             o2_status = "WARNING"
+            if status == "NORMAL":
+                status = "WARNING"
 
     return {
         "id": hosp.id,

@@ -196,6 +196,16 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 14.0, "o2_curr": 10.5, "d_cyl": 40, "b_cyl": 20, "consumption": 2.2
             },
             {
+                "name": "Govt Mohan Kumaramangalam Medical College Hospital",
+                "district": "Salem",
+                "address": "Collectorate Complex, Salem, Tamil Nadu 636001",
+                "lat": 11.6620, "lng": 78.1480,
+                "phone": "+91 427 244 5555", "email": "gmkmch.salem@tn.gov.in",
+                "pmjay": True, "cghs": True, "has_hms": True, "rating": 4.4,
+                "specialties": ["Trauma", "Cardiology", "Emergency Medicine", "General Surgery", "Pediatrics"],
+                "o2_tank": 16.0, "o2_curr": 12.0, "d_cyl": 45, "b_cyl": 25, "consumption": 2.6
+            },
+            {
                 "name": "Kanchipuram District Govt Headquarters Hospital",
                 "district": "Kanchipuram",
                 "address": "Railway Station Road, Kanchipuram, TN 631501",
