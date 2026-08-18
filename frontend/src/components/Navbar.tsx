@@ -2,7 +2,7 @@ import React from 'react';
 import { UserRole, User as UserType } from '../types';
 import { 
   Activity, ShieldCheck, PhoneCall, Building2, User, Landmark, 
-  Cpu, Link2, Sparkles, Radio, LogIn, LogOut, Lock
+  Cpu, Link2, Sparkles, Radio, LogIn, LogOut, Lock, Users
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -131,6 +131,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={() => onTabChange('audit-trail')}
               >
                 <ShieldCheck size={16} /> Blockchain Audit Chain
+              </button>
+              <button
+                className={`nav-item ${activeTab === 'user-registry' ? 'active' : ''}`}
+                onClick={() => onTabChange('user-registry')}
+              >
+                <Users size={16} /> User Registry
               </button>
             </>
           )}
