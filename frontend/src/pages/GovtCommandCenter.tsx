@@ -7,6 +7,7 @@ import {
 import { GovtCommandOverview, DistrictAlert, DistrictOverviewItem } from '../types';
 import { api, createWebSocketSubscriber } from '../api/client';
 import { subscribeCollection, updateFirestoreDoc } from '../firebase';
+import { fetchLiveMedicines, MedicineStock } from '../services/medicineService';
 
 export const GovtCommandCenter: React.FC = () => {
   const [overview, setOverview] = useState<GovtCommandOverview | null>(null);
@@ -18,18 +19,76 @@ export const GovtCommandCenter: React.FC = () => {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Medicine supply states
-  const [medicines, setMedicines] = useState<any[]>([]);
+  const [medicines, setMedicines] = useState<MedicineStock[]>([]);
 
-  // Subscribe to medicines Firestore updates
+  // Load medicines from Google Sheet / Backend SQLite
+  const loadMedicines = async () => {
+    const data = await fetchLiveMedicines();
+    if (data && data.length > 0) {
+      setMedicines(prev => {
+        // preserve active restocking state for items currently en route
+        return data.map(m => {
+          const existing = prev.find(p => p.id === m.id);
+          if (existing && existing.isRestocking && existing.restockEta && existing.restockEta > 0) {
+            return { ...m, isRestocking: true, restockEta: existing.restockEta, vehicle: existing.vehicle };
+          }
+          return m;
+        });
+      });
+    }
+  };
+
   useEffect(() => {
-    const unsubscribe = subscribeCollection('medicines', (fireMeds) => {
-      if (fireMeds && fireMeds.length > 0) {
-        const sorted = [...fireMeds].sort((a, b) => Number(a.id) - Number(b.id));
-        setMedicines(sorted);
-      }
-    });
-    return () => unsubscribe();
+    loadMedicines();
+    const interval = setInterval(loadMedicines, 4000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Delivery countdown ticker
+  useEffect(() => {
+    const ticker = setInterval(() => {
+      setMedicines(prev => prev.map(m => {
+        if (m.isRestocking && m.restockEta && m.restockEta > 0) {
+          const nextEta = m.restockEta - 1;
+          if (nextEta <= 0) {
+            return { ...m, isRestocking: false, restockEta: 0, stockLevel: 100 };
+          }
+          return { ...m, restockEta: nextEta };
+        }
+        return m;
+      }));
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, []);
+
+  const handleDispatch = async (med: MedicineStock) => {
+    const vehicleId = `TN-${String(med.hospital_id).padStart(2, '0')}-MED-${Math.floor(100 + Math.random() * 899)}`;
+    setMedicines(prev => prev.map(m => {
+      if (m.id === med.id) {
+        return {
+          ...m,
+          isRestocking: true,
+          restockEta: 15,
+          vehicle: vehicleId
+        };
+      }
+      return m;
+    }));
+
+    try {
+      await api.dispatchMedicineResupply(med.hospital_id || 1, med.med_id || med.id);
+    } catch {
+      // Netlify static mode fallback
+    }
+
+    try {
+      await updateFirestoreDoc('medicines', med.id, {
+        isRestocking: true,
+        restockEta: 15,
+        vehicle: vehicleId
+      });
+    } catch {}
+  };
 
 
   // Reallocation modal state
@@ -292,17 +351,9 @@ export const GovtCommandCenter: React.FC = () => {
                     </div>
                   ) : (
                     <button
-                      onClick={async () => {
-                        try {
-                          // Backend API handles BOTH SQLite + Firestore atomically
-                          await api.dispatchMedicineResupply(med.hospital_id || 1, med.med_id || med.id);
-                        } catch (err) {
-                          console.error("Failed to dispatch resupply:", err);
-                          alert("Dispatch failed. Please try again.");
-                        }
-                      }}
+                      onClick={() => handleDispatch(med)}
                       className={`btn btn-xs ${isLow ? 'btn-primary animate-pulse' : 'btn-secondary'}`}
-                      style={{ width: '100%', fontSize: '0.72rem', padding: '4px' }}
+                      style={{ width: '100%', fontSize: '0.72rem', padding: '6px', fontWeight: 700, cursor: 'pointer' }}
                     >
                       Dispatch Emergency Resupply
                     </button>

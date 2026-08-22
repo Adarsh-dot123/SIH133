@@ -6,69 +6,49 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { subscribeCollection, updateFirestoreDoc } from '../firebase';
 
-interface MedicineStock {
-  id: string;
-  med_id: string;
-  hospital_id: number;
-  name: string;
-  category: string;
-  stockLevel: number;
-  burnRate: number;
-  minThreshold: number;
-  facility: string;
-  isRestocking?: boolean;
-  restockEta?: number;
-  vehicle?: string;
-}
-
-const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
+import { fetchLiveMedicines, MedicineStock } from '../services/medicineService';
 
 export const MedicineTracker: React.FC = () => {
   const { t } = useLanguage();
   const [medicines, setMedicines] = useState<MedicineStock[]>([]);
   const [selectedFacility, setSelectedFacility] = useState<string>('ALL');
 
-  const fetchMedicinesFromBackend = async () => {
-    try {
-      const res = await fetch(`${API}/api/hospitals/medicines/all`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.length > 0) {
-          setMedicines(data);
-        }
-      }
-    } catch { /* fallback to firestore */ }
+  const loadMedicines = async () => {
+    const data = await fetchLiveMedicines();
+    if (data && data.length > 0) {
+      setMedicines(prev => {
+        return data.map(m => {
+          const existing = prev.find(p => p.id === m.id);
+          if (existing && existing.isRestocking && existing.restockEta && existing.restockEta > 0) {
+            return { ...m, isRestocking: true, restockEta: existing.restockEta, vehicle: existing.vehicle };
+          }
+          return m;
+        });
+      });
+    }
   };
 
-  // 1. Fetch live medicine inventory from backend SQLite (synced from Google Sheet) + Firestore
   useEffect(() => {
-    fetchMedicinesFromBackend();
-    const interval = setInterval(fetchMedicinesFromBackend, 3000);
+    loadMedicines();
+    const interval = setInterval(loadMedicines, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
-    const unsubscribe = subscribeCollection('medicines', (fireMeds) => {
-      if (fireMeds && fireMeds.length > 0) {
-        // Normalize fields (handle both stockLevel and stock_level)
-        const normalized = fireMeds.map((m: any) => {
-          const rawStock = m.stockLevel !== undefined ? m.stockLevel : (m.stock_level !== undefined ? m.stock_level : 0);
-          const rawThresh = m.minThreshold !== undefined ? m.minThreshold : (m.min_threshold !== undefined ? m.min_threshold : 20);
-          const numStock = Number(rawStock);
-          const numThresh = Number(rawThresh);
-          return {
-            ...m,
-            stockLevel: isNaN(numStock) ? 0 : numStock,
-            minThreshold: isNaN(numThresh) ? 20 : numThresh,
-            facility: m.facility || m.hospital_name || `Facility #${m.hospital_id}`,
-          };
-        });
-        const sorted = normalized.sort((a: any, b: any) => a.id.localeCompare(b.id));
-        setMedicines(sorted);
-      }
-    });
-
-    return () => {
-      clearInterval(interval);
-      unsubscribe();
-    };
+  // Delivery countdown ticker
+  useEffect(() => {
+    const ticker = setInterval(() => {
+      setMedicines(prev => prev.map(m => {
+        if (m.isRestocking && m.restockEta && m.restockEta > 0) {
+          const nextEta = m.restockEta - 1;
+          if (nextEta <= 0) {
+            return { ...m, isRestocking: false, restockEta: 0, stockLevel: 100 };
+          }
+          return { ...m, restockEta: nextEta };
+        }
+        return m;
+      }));
+    }, 1000);
+    return () => clearInterval(ticker);
   }, []);
 
 
