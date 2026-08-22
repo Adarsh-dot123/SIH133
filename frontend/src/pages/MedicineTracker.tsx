@@ -151,13 +151,18 @@ export const MedicineTracker: React.FC = () => {
             gap: '20px'
           }}>
             {filteredMeds.map((med) => {
-              const isLow = med.stockLevel <= med.minThreshold;
+              const isEmpty = med.stockLevel <= 0;
+              const isLow = med.stockLevel > 0 && med.stockLevel <= med.minThreshold;
+              const isCritical = isEmpty || isLow;
+              const barColor = isEmpty ? '#dc2626' : isLow ? '#ef4444' : '#0d9488';
+              const badgeColor = isCritical ? '#dc2626' : '#0d9488';
+              const badgeBg = isCritical ? '#fee2e2' : '#ccfbf1';
               
               return (
                 <div key={med.id} className="card" style={{
                   padding: '24px',
                   borderRadius: '18px',
-                  border: `1px solid ${isLow ? '#fee2e2' : '#f1f5f9'}`,
+                  border: `1px solid ${isCritical ? '#fee2e2' : '#f1f5f9'}`,
                   background: '#ffffff',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
                   display: 'flex',
@@ -175,12 +180,12 @@ export const MedicineTracker: React.FC = () => {
                       <span style={{
                         fontSize: '0.72rem',
                         fontWeight: 700,
-                        color: isLow ? '#dc2626' : '#0d9488',
-                        background: isLow ? '#fee2e2' : '#ccfbf1',
+                        color: badgeColor,
+                        background: badgeBg,
                         padding: '3px 10px',
                         borderRadius: '9999px'
                       }}>
-                        {med.stockLevel}% Stock
+                        {isEmpty ? '⚠ OUT OF STOCK' : `${med.stockLevel}% Stock`}
                       </span>
                     </div>
                     
@@ -198,10 +203,11 @@ export const MedicineTracker: React.FC = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '9999px', overflow: 'hidden' }}>
                       <div style={{
-                        width: `${med.stockLevel}%`,
+                        width: `${Math.max(med.stockLevel, isEmpty ? 100 : 0)}%`,
                         height: '100%',
-                        background: isLow ? '#ef4444' : '#0d9488',
-                        transition: 'width 0.3s ease'
+                        background: barColor,
+                        transition: 'width 0.3s ease',
+                        ...(isEmpty ? { width: '100%', opacity: 0.3 } : {})
                       }} />
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94a3b8' }}>
@@ -242,6 +248,30 @@ export const MedicineTracker: React.FC = () => {
                         }}>
                           {formatCountdown(med.restockEta)}
                         </span>
+                      </div>
+                    ) : isEmpty ? (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px', 
+                        color: '#dc2626', 
+                        fontSize: '0.78rem',
+                        fontWeight: 700
+                      }}>
+                        <AlertCircle size={14} />
+                        <span>⚠ CRITICAL — Stock Depleted. Awaiting Emergency Resupply.</span>
+                      </div>
+                    ) : isLow ? (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px', 
+                        color: '#d97706', 
+                        fontSize: '0.78rem',
+                        fontWeight: 600
+                      }}>
+                        <AlertCircle size={14} />
+                        <span>⚠ Low Stock — Below safety margin ({med.minThreshold}%)</span>
                       </div>
                     ) : (
                       <div style={{ 

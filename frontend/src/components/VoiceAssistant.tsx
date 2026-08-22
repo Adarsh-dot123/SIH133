@@ -164,95 +164,96 @@ export const VoiceAssistant: React.FC = () => {
     setStatus('voice_assistant_processing');
 
     try {
-      const lowercaseQuery = text.toLowerCase();
-      let responseText = '';
+      const q = text.toLowerCase();
       let detectedSpecialty = '';
 
-      // Triage keyword matching logic for specialties
-      if (lowercaseQuery.includes('heart') || lowercaseQuery.includes('cardiac') || lowercaseQuery.includes('pain') || lowercaseQuery.includes('chest') ||
-          lowercaseQuery.includes('दर्द') || lowercaseQuery.includes('सीने') ||
-          lowercaseQuery.includes('வலி') || lowercaseQuery.includes('நெஞ்சு') ||
-          lowercaseQuery.includes('నొప్పి') || lowercaseQuery.includes('గుండె') ||
-          lowercaseQuery.includes('ನొప్పి') || lowercaseQuery.includes('ಎದೆ') ||
-          lowercaseQuery.includes('छातीत') || lowercaseQuery.includes('दुखत') ||
-          lowercaseQuery.includes('বुक') || lowercaseQuery.includes('ব্যথা') ||
-          lowercaseQuery.includes('છાતી') || lowercaseQuery.includes('દુખાવો')) {
+      if (q.includes('heart') || q.includes('cardiac') || q.includes('chest') || q.includes('pain') ||
+          q.includes('दर्द') || q.includes('सीने') || q.includes('வலி') || q.includes('நெஞ்சு') ||
+          q.includes('నొప్పి') || q.includes('గుండె') || q.includes('ಎದೆ') ||
+          q.includes('छातीत') || q.includes('দুখাব')) {
         detectedSpecialty = 'Cardiology';
-      } else if (lowercaseQuery.includes('kidney') || lowercaseQuery.includes('renal') || lowercaseQuery.includes('dialysis') || lowercaseQuery.includes('creatinine') ||
-                 lowercaseQuery.includes('गुर्दे') ||
-                 lowercaseQuery.includes('சிறுநீரகம்') ||
-                 lowercaseQuery.includes('కిడ్నీ') || lowercaseQuery.includes('మూత్రపిండాలు') ||
-                 lowercaseQuery.includes('ಕಿಡ್ನಿ') ||
-                 lowercaseQuery.includes('വൃക്ക') ||
-                 lowercaseQuery.includes('मूत्रपिंड') ||
-                 lowercaseQuery.includes('বৃক্ক') ||
-                 lowercaseQuery.includes('કિડની')) {
+      } else if (q.includes('kidney') || q.includes('renal') || q.includes('dialysis') ||
+                 q.includes('గుర్దే') || q.includes('కిడ్నీ') || q.includes('మూత్రపిండ') ||
+                 q.includes('சிறுநீரகம்') || q.includes('ಕಿಡ್ನಿ') || q.includes('வൃക്ക')) {
         detectedSpecialty = 'Nephrology';
-      } else if (lowercaseQuery.includes('child') || lowercaseQuery.includes('pediatric') || lowercaseQuery.includes('baby') || lowercaseQuery.includes('infant') ||
-                 lowercaseQuery.includes('बच्चे') || lowercaseQuery.includes('शिशु') ||
-                 lowercaseQuery.includes('குழந்தை') ||
-                 lowercaseQuery.includes('పిల్లల') ||
-                 lowercaseQuery.includes('ಮಕ್ಕಳ') ||
-                 lowercaseQuery.includes('കുട്ടി') ||
-                 lowercaseQuery.includes('बाळ') ||
-                 lowercaseQuery.includes('శిశువు') ||
-                 lowercaseQuery.includes('শিশু') ||
-                 lowercaseQuery.includes('બાળક')) {
+      } else if (q.includes('child') || q.includes('baby') || q.includes('pediatric') || q.includes('infant') ||
+                 q.includes('బాళ') || q.includes('పిల్లల') || q.includes('குழந்தை') || q.includes('बच्चे') ||
+                 q.includes('ಮಕ್ಕಳ') || q.includes('കുട്ടി') || q.includes('শিশু')) {
         detectedSpecialty = 'Pediatrics';
-      } else if (lowercaseQuery.includes('lung') || lowercaseQuery.includes('breath') || lowercaseQuery.includes('oxygen') || lowercaseQuery.includes('cough') || lowercaseQuery.includes('pneumonia') ||
-                 lowercaseQuery.includes('सांस') || lowercaseQuery.includes('फेफड़े') ||
-                 lowercaseQuery.includes('சுவாசம்') ||
-                 lowercaseQuery.includes('శ్వాస') ||
-                 lowercaseQuery.includes('ಉಸಿರಾಟ') ||
-                 lowercaseQuery.includes('ശ്വാസം') ||
-                 lowercaseQuery.includes('श्वास') ||
-                 lowercaseQuery.includes('শ্বাস') ||
-                 lowercaseQuery.includes('શ્વાસ')) {
+      } else if (q.includes('lung') || q.includes('breath') || q.includes('oxygen') || q.includes('cough') ||
+                 q.includes('సాస') || q.includes('శ్వాస') || q.includes('சுவாசம்') || q.includes('सांस') ||
+                 q.includes('ಉಸಿರಾಟ') || q.includes('ശ്വാസം')) {
         detectedSpecialty = 'Pulmonology';
-      } else if (lowercaseQuery.includes('icu') || lowercaseQuery.includes('bed') || lowercaseQuery.includes('ventilator') || lowercaseQuery.includes('emergency') || lowercaseQuery.includes('accident') || lowercaseQuery.includes('trauma') || lowercaseQuery.includes('injury')) {
+      } else if (q.includes('medicine') || q.includes('drug') || q.includes('stock') || q.includes('supply') ||
+                 q.includes('మందులు') || q.includes('స్టాక్') || q.includes('दवाई') ||
+                 q.includes('மருந்து') || q.includes('ಔಷಧ')) {
+        detectedSpecialty = 'Medicine Stock';
+      } else if (q.includes('icu') || q.includes('bed') || q.includes('ventilator') ||
+                 q.includes('emergency') || q.includes('accident') || q.includes('trauma')) {
         detectedSpecialty = 'Trauma';
       }
 
-      // 1. Dispatch filter event to live-update the React UI list
-      window.dispatchEvent(new CustomEvent('medflow-voice-filter', { 
-        detail: { specialty: detectedSpecialty } 
+      // Dispatch filter event to live-update the UI
+      window.dispatchEvent(new CustomEvent('medflow-voice-filter', {
+        detail: { specialty: detectedSpecialty }
       }));
 
-      // 2. Localized responses matching selected language and specialty
+      // Fetch LIVE hospital data for real answers
+      let liveContext = '';
+      try {
+        const apiBase = import.meta.env.VITE_API_URL ||
+          (typeof window !== 'undefined' && window.location.port === '5173' ? '/api' : 'http://localhost:8000/api');
+        const rootUrl = apiBase.replace('/api', '');
+        const specParam = detectedSpecialty && detectedSpecialty !== 'Medicine Stock'
+          ? `?specialty=${encodeURIComponent(detectedSpecialty)}` : '';
+        const res = await fetch(`${rootUrl}/api/hospitals${specParam}`);
+        if (res.ok) {
+          const hospitals = await res.json();
+          if (Array.isArray(hospitals) && hospitals.length > 0) {
+            const names = hospitals.slice(0, 3).map((h: any) => h.name).join(', ');
+            const totalICU = hospitals.reduce((s: number, h: any) =>
+              s + (h.beds?.filter((b: any) => b.bed_type === 'ICU' && b.status === 'AVAILABLE')?.length || 0), 0);
+            const totalGen = hospitals.reduce((s: number, h: any) => s + (h.general_beds_available || 0), 0);
+            liveContext = `Hospitals: ${names}. ICU beds available: ${totalICU}. General beds: ${totalGen}.`;
+          }
+        }
+      } catch { /* silently fall back */ }
+
+      const spec = detectedSpecialty || 'General Medicine';
+      const info = liveContext || 'Searching nearest matching hospitals.';
+
       const responses: Record<AssistantLanguageCode, string> = {
-        en: detectedSpecialty 
-          ? `For ${detectedSpecialty === 'Trauma' ? 'Trauma and Emergency' : detectedSpecialty}, beds are available at Apollo and Fortis Hospital.`
-          : "General Medicine filter applied. Searching matching resource hospitals.",
+        en: `For ${spec}: ${info}`,
         hi: detectedSpecialty
-          ? `${detectedSpecialty === 'Cardiology' ? 'कार्डियोलॉजी के लिए अपोलो और फोर्टिस में आईसीयू बेड उपलब्ध हैं' : detectedSpecialty === 'Trauma' ? 'ट्रॉमा और इमरजेंसी के लिए अपोलो और फोर्टिस में आईसीयू बेड उपलब्ध हैं' : detectedSpecialty === 'Nephrology' ? 'नेफ्रोलॉजी के लिए अपोलो और फोर्टिस में बेड उपलब्ध हैं' : detectedSpecialty === 'Pediatrics' ? 'पीडियाट्रिक्स के लिए फोर्टिस मल्लार में बेड उपलब्ध हैं' : 'पल्मोनोलॉजी के लिए फोर्टिस मल्लार और सेलम मेडिकल सेंटर में बेड उपलब्ध हैं'}`
-          : "सामान्य चिकित्सा फ़िल्टर लागू किया गया। मिलान संसाधन अस्पतालों की खोज की जा रही है।",
+          ? `${spec} के लिए: ${liveContext || 'नजदीकी अस्पतालों में बेड उपलब्ध हैं।'}`
+          : 'सामान्य चिकित्सा फ़िल्टर लागू किया गया। मिलान अस्पतालों की खोज की जा रही है।',
         ta: detectedSpecialty
-          ? `${detectedSpecialty === 'Cardiology' ? 'இதயவியல் சிகிச்சைக்காக அப்பல்லோ மருத்துவமனையில் படுக்கைகள் காலியாக உள்ளன' : detectedSpecialty === 'Trauma' ? 'விபத்து மற்றும் அவசர சிகிச்சைக்காக அப்பல்லோ மருத்துவமனையில் படுக்கைகள் காலியாக உள்ளன' : detectedSpecialty === 'Nephrology' ? 'சிறுநீரகவியல் சிகிச்சைக்காக அப்பல்லோ மருத்துவமனையில் படுக்கைகள் காலியாக உள்ளன' : detectedSpecialty === 'Pediatrics' ? 'குழந்தை நல சிகிச்சைக்காக ஃபோர்டிஸ் மலர் மருத்துவமனையில் படுக்கைகள் காலியாக உள்ளன' : 'நுரையீரல் சிகிச்சைக்காக ஃபோர்டிஸ் மலர் மருத்துவமனையில் படுக்கைகள் காலியாக உள்ளன'}`
-          : "பொது மருத்துவம் வடிகட்டி பயன்படுத்தப்பட்டது. மருத்துவமனைகளைத் தேடுகிறது.",
+          ? `${spec} சிகிச்சைக்கு: ${liveContext || 'அருகிலுள்ள மருத்துவமனைகளில் படுக்கைகள் உள்ளன.'}`
+          : 'பொது மருத்துவம் வடிகட்டி பயன்படுத்தப்பட்டது.',
         te: detectedSpecialty
-          ? `${detectedSpecialty === 'Cardiology' ? 'కార్డియాలజీ కోసం అపోలో ఆసుపత్రిలో పడకలు అందుబాటులో ఉన్నాయి' : detectedSpecialty === 'Trauma' ? 'ట్రామా మరియు అత్యవసర చికిత్స కోసం అపోలో ఆసుపత్రిలో పడకలు అందుబాటులో ఉన్నాయి' : detectedSpecialty === 'Nephrology' ? 'నెఫ్రాలజీ కోసం అపోలో ఆసుపత్రిలో పడకలు అందుబాటులో ఉన్నాయి' : detectedSpecialty === 'Pediatrics' ? 'పిడియాట్రిక్స్ కోసం ఫోర్టిస్ మలార్ ఆసుపత్రిలో పడకలు అందుబాటులో ఉన్నాయి' : 'పల్మనాలజీ కోసం ఫోర్టిస్ మలార్ ఆసుపత్రిలో పడకలు అందుబాటులో ఉన్నాయి'}`
-          : "జనరల్ మెడిసిన్ ఫిల్టర్ వర్తింపజేయబడింది. సరిపోలే ఆసుపత్రుల కోసం శోధిస్తోంది.",
+          ? `${spec} కోసం: ${liveContext || 'సమీపంలో ఆసుపత్రులలో పడకలు అందుబాటులో ఉన్నాయి.'}`
+          : 'జనరల్ మెడిసిన్ ఫిల్టర్ వర్తింపజేయబడింది. శోధిస్తోంది.',
         kn: detectedSpecialty
-          ? `${detectedSpecialty === 'Cardiology' ? 'ಕಾರ್ಡಿಯಾಲಜಿಗಾಗಿ ಅಪೊಲೊ ಆಸ್ಪತ್ರೆಯಲ್ಲಿ ಹಾಸಿಗೆಗಳು ಲಭ್ಯವಿವೆ' : detectedSpecialty === 'Trauma' ? 'ಟ್ರಾಮಾ ಮತ್ತು ತುರ್ತು ಚಿಕಿತ್ಸೆಗಾಗಿ ಅಪೊಲೊ ಆಸ್ಪತ್ರೆಯಲ್ಲಿ ಹಾಸಿಗೆಗಳು ಲಭ್ಯವಿವೆ' : detectedSpecialty === 'Nephrology' ? 'ನೆಫ್ರಾಲಜಿಗಾಗಿ ಅಪೊಲೊ ಆಸ್ಪತ್ರೆಯಲ್ಲಿ ಹಾಸಿಗೆಗಳು ಲಭ್ಯವಿವೆ' : detectedSpecialty === 'Pediatrics' ? 'ಪಿಡಿಯಾಟ್ರಿಕ್ಸ್ಗಾಗಿ ಫೋರ್ಟಿಸ್ ಮಲಾರ್ ಆಸ್ಪತ್ರೆಯಲ್ಲಿ ಹಾಸಿಗೆಗಳು ಲಭ್ಯವಿವೆ' : 'ಪಲ್ಮನಾಲಜಿಗಾಗಿ ಫೋರ್ಟಿಸ್ ಮಲಾರ್ ಆಸ್ಪತ್ರೆಯಲ್ಲಿ ಹಾಸಿಗೆಗಳು ಲಭ್ಯವಿವೆ'}`
-          : "ಸಾಮಾನ್ಯ ಔಷಧ ಫಿಲ್ಟರ್ ಅನ್ವಯಿಸಲಾಗಿದೆ. ಹೊಂದಾಣಿಕೆಯ ಆಸ್ಪತ್ರೆಗಳನ್ನು ಹುಡುಕಲಾಗುತ್ತಿದೆ.",
+          ? `${spec} ಗೆ: ${liveContext || 'ಹತ್ತಿರದ ಆಸ್ಪತ್ರೆಗಳಲ್ಲಿ ಹಾಸಿಗೆಗಳು ಲಭ್ಯ.'}`
+          : 'ಸಾಮಾನ್ಯ ಔಷಧ ಫಿಲ್ಟರ್ ಅನ್ವಯ.',
         ml: detectedSpecialty
-          ? `${detectedSpecialty === 'Cardiology' ? 'കാർഡിയോളജിക്ക് അപ്പോളോ ആശുപത്രിയിൽ കിടക്കകൾ ലഭ്യമാണ്' : detectedSpecialty === 'Trauma' ? 'ട്രോമ, എമർജൻസി വിഭാഗങ്ങളിലേക്ക് അപ്പോളോ ആശുപത്രിയിൽ കിടക്കകൾ ലഭ്യമാണ്' : detectedSpecialty === 'Nephrology' ? 'നെഫ്രോളജിക്ക് അപ്പോളോ ആശുപത്രിയിൽ കിടക്കകൾ ലഭ്യമാണ്' : detectedSpecialty === 'Pediatrics' ? 'പീഡിയാട്രിക്സിന് ഫോർട്ടിസ് മലർ ആശുപത്രിയിൽ കിടക്കകൾ ലഭ്യമാണ്' : 'പൾമണോളജിക്ക് ഫോർട്ടിസ് മലർ ആശുപത്രിയിൽ കിടക്കകൾ ലഭ്യമാണ്'}`
-          : "ജനറൽ മെഡിസിൻ ഫിൽട്ടർ പ്രയോഗിച്ചു. അനുയോജ്യമായ ആശുപത്രികൾ തിരയുന്നു.",
+          ? `${spec} ന്: ${liveContext || 'അടുത്ത ആശുപത്രിയിൽ കിടക്ക ലഭ്യം.'}`
+          : 'ജനറൽ ഫിൽട്ടർ പ്രയോഗിച്ചു.',
         mr: detectedSpecialty
-          ? `${detectedSpecialty === 'Cardiology' ? 'कार्डिओलॉजीसाठी अपोलो हॉस्पिटलमध्ये बेड उपलब्ध आहेत' : detectedSpecialty === 'Trauma' ? 'ट्रॉमा आणि इमर्जन्सीसाठी अपोलो हॉस्पिटलमध्ये बेड उपलब्ध आहेत' : detectedSpecialty === 'Nephrology' ? 'नेफ्रोलॉजीसाठी अपोलो हॉस्पिटलमध्ये बेड उपलब्ध आहेत' : detectedSpecialty === 'Pediatrics' ? 'पीडियाट्रिक्ससाठी फोर्टिस मळार हॉस्पिटलमध्ये बेड उपलब्ध आहेत' : 'पल्मोनॉलॉजीसाठी फोर्टिस मळार हॉस्पिटलमध्ये बेड उपलब्ध आहेत'}`
-          : "सामान्य औषध फिल्टर लागू केला. जुळणारे रुग्णालय शोधत आहे.",
+          ? `${spec} साठी: ${liveContext || 'जवळच्या रुग्णालयांमध्ये बेड उपलब्ध.'}`
+          : 'सामान्य फिल्टर लागू केला.',
         bn: detectedSpecialty
-          ? `${detectedSpecialty === 'Cardiology' ? 'কার্ডিওলজির জন্য অ্যাপোলো হাসপাতালে শয্যা উপলব্ধ রয়েছে' : detectedSpecialty === 'Trauma' ? 'ট্রমা এবং জরুরি অবস্থার জন্য অ্যাপোলো হাসপাতালে শয্যা উপলব্ধ রয়েছে' : detectedSpecialty === 'Nephrology' ? 'নেফ্রোলজির জন্য অ্যাপোলো হাসপাতালে শয্যা উপলব্ধ রয়েছে' : detectedSpecialty === 'Pediatrics' ? 'পিডিয়াট্রিক্সের জন্য ফোর্টিস মালার হাসপাতালে শয্যা উপলব্ধ রয়েছে' : 'পালমোনোলজির জন্য ফোর্টিস মালার হাসপাতালে শয্যা উপলব্ধ রয়েছে'}`
-          : "সাধারণ মেডিসিন ফিল্টার প্রয়োগ করা হয়েছে। অনুসন্ধান করা হচ্ছে।",
+          ? `${spec} এর জন্য: ${liveContext || 'কাছের হাসপাতালে শয্যা পাওয়া যাচ্ছে।'}`
+          : 'সাধারণ ফিল্টার প্রয়োগ হয়েছে।',
         gu: detectedSpecialty
-          ? `${detectedSpecialty === 'Cardiology' ? 'કાર્ડિયોલોજી માટે એપોલો હોસ્પિટલમાં બેડ ઉપલબ્ધ છે' : detectedSpecialty === 'Trauma' ? 'ટ્રોમા અને ઇમરજન્સી માટે એપોલો હોસ્પિટલમાં બેડ ઉપલબ્ધ છે' : detectedSpecialty === 'Nephrology' ? 'નેફ્રોલોજી માટે એપોલો હોસ્પિટલમાં બેડ ઉપલબ્ધ છે' : detectedSpecialty === 'Pediatrics' ? 'પીડિયાટ્રિક્સ માટે ફોર્ટિસ મલાર હોસ્પિટલમાં બેડ ઉપલબ્ધ છે' : 'પલ્મોનોલોજી માટે ફોર્ટિસ મલાર હોસ્પિટલમાં બેડ ઉપલબ્ધ છે'}`
-          : "જનરલ મેડિસિન ફિલ્ટર લાગુ કરવામાં આવ્યું છે. યોગ્ય હોસ્પિટલ શોધી રહ્યા છીએ."
+          ? `${spec} માટે: ${liveContext || 'નજીકની હોસ્પિટલોમાં બેડ ઉપલબ્ધ.'}`
+          : 'સામાન્ય ફિલ્ટર લાગુ.'
       };
 
-      responseText = responses[assistantLang] || responses.en;
+      const responseText = responses[assistantLang] || responses.en;
       setBotResponse(responseText);
       setStatus('voice_assistant_speaking');
-      await speakText(responseText);
+      speakNow(responseText);
     } catch (err) {
       console.error('[VoiceAssistant] Processing error:', err);
       setStatus('Sorry, I encountered an error. Please try again.');
@@ -260,96 +261,45 @@ export const VoiceAssistant: React.FC = () => {
     }
   };
 
-  const speakText = async (text: string) => {
-    try {
-      const apiBase = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.port === '5173' ? '/api' : 'http://localhost:8000/api');
-      const rootUrl = apiBase.replace('/api', '');
-
-      const ttsResponse = await fetch(`${rootUrl}/api/voice/synthesize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          lang: assistantLang
-        })
-      });
-
-      if (ttsResponse.ok) {
-        const audioBlob = await ttsResponse.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        if (audioRef.current) {
-          audioRef.current.src = audioUrl;
-          setIsPlaying(true);
-          audioRef.current.play();
-          audioRef.current.onended = () => {
-            setIsPlaying(false);
-            setStatus('voice_assistant_welcome');
-            setLoading(false);
-          };
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('[VoiceAssistant] Google TTS synthesis failed, using local speech fallback:', err);
-    }
-
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      const langMap: Record<AssistantLanguageCode, string> = {
-        en: 'en-IN',
-        hi: 'hi-IN',
-        ta: 'ta-IN',
-        te: 'te-IN',
-        kn: 'kn-IN',
-        ml: 'ml-IN',
-        mr: 'mr-IN',
-        bn: 'bn-IN',
-        gu: 'gu-IN'
-      };
-      utterance.lang = langMap[assistantLang] || 'en-US';
-      setIsPlaying(true);
-      utterance.onend = () => {
-        setIsPlaying(false);
-        setStatus('voice_assistant_welcome');
-        setLoading(false);
-      };
-      utterance.onerror = () => {
-        setIsPlaying(false);
-        setStatus('voice_assistant_welcome');
-        setLoading(false);
-      };
-      window.speechSynthesis.speak(utterance);
-    } else {
+  // Use browser-native SpeechSynthesis — INSTANT, no network call required
+  const speakNow = (text: string) => {
+    if (!('speechSynthesis' in window)) {
       setStatus('voice_assistant_welcome');
       setLoading(false);
+      return;
     }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const langMap: Record<AssistantLanguageCode, string> = {
+      en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN',
+      kn: 'kn-IN', ml: 'ml-IN', mr: 'mr-IN', bn: 'bn-IN', gu: 'gu-IN'
+    };
+    utterance.lang = langMap[assistantLang] || 'en-IN';
+    utterance.rate = 0.92;
+    setIsPlaying(true);
+    utterance.onend = () => { setIsPlaying(false); setStatus('voice_assistant_welcome'); setLoading(false); };
+    utterance.onerror = () => { setIsPlaying(false); setStatus('voice_assistant_welcome'); setLoading(false); };
+    window.speechSynthesis.speak(utterance);
   };
 
   const handleClose = () => {
     stopRecording();
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-    }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setIsPlaying(false);
     setIsOpen(false);
     setLoading(false);
   };
 
   const presetChips = [
-    { label: "मुझे सीने में दर्द है (Hindi)", text: "मुझे सीने में दर्द है", lang: "hi" as AssistantLanguageCode },
-    { label: "குழந்தை மருத்துவர் தேவை (Tamil)", text: "குழந்தை மருத்துவர் தேவை", lang: "ta" as AssistantLanguageCode },
-    { label: "నాకు కిడ్నీ సమస్య ఉంది (Telugu)", text: "నాకు కిడ్నీ సమస్య ఉంది", lang: "te" as AssistantLanguageCode },
-    { label: "Need ICU Bed (English)", text: "Need ICU Bed", lang: "en" as AssistantLanguageCode },
-    { label: "ಕಿಡ್ನಿ ಸಮಸ್ಯೆ ಇದೆ (Kannada)", text: "ಕಿಡ್ನಿ ಸಮಸ್ಯೆ ಇದೆ", lang: "kn" as AssistantLanguageCode },
-    { label: "എനിക്ക് ശ്വാസംമുട്ടൽ ഉണ്ട് (Malayalam)", text: "എനിക്ക് ശ്വാസംമുട്ടൽ ഉണ്ട്", lang: "ml" as AssistantLanguageCode },
-    { label: "माझ्या छातीत दुखत आहे (Marathi)", text: "माझ्या छातीत दुखत आहे", lang: "mr" as AssistantLanguageCode },
-    { label: "শিশু বিশেষজ্ঞ প্রয়োজন (Bengali)", text: "শিশু বিশেষজ্ঞ প্রয়োজন", lang: "bn" as AssistantLanguageCode },
-    { label: "મને કિડનીની તકલીફ છે (Gujarati)", text: "મને કિડનીની તકલીફ છે", lang: "gu" as AssistantLanguageCode }
+    { label: "మందుల నిల్వ (Telugu)", text: "మందుల స్టాక్ ఏమిటి", lang: "te" as AssistantLanguageCode },
+    { label: "ముझे सीने में दर्द है (Hindi)", text: "मुझे सीने में दर्द है", lang: "hi" as AssistantLanguageCode },
+    { label: "குழந்தை மருத்துவர் (Tamil)", text: "குழந்தை மருத்துவர் தேவை", lang: "ta" as AssistantLanguageCode },
+    { label: "Need ICU Bed (English)", text: "Need ICU Bed emergency", lang: "en" as AssistantLanguageCode },
+    { label: "నాకు కిడ్నీ సమస్య (Telugu)", text: "నాకు కిడ్నీ సమస్య ఉంది", lang: "te" as AssistantLanguageCode },
+    { label: "ಕಿಡ್ನಿ ಸಮಸ್ಯೆ (Kannada)", text: "ಕಿಡ್ನಿ ಸಮಸ್ಯೆ ಇದೆ", lang: "kn" as AssistantLanguageCode },
+    { label: "Medicine stock status", text: "What is the medicine stock", lang: "en" as AssistantLanguageCode },
+    { label: "শিশু বিশেষজ্ঞ (Bengali)", text: "শিশু বিশেষজ্ঞ প্রয়োজন", lang: "bn" as AssistantLanguageCode }
   ];
 
   const handlePresetClick = async (chip: typeof presetChips[0]) => {
@@ -363,81 +313,54 @@ export const VoiceAssistant: React.FC = () => {
       <button
         onClick={() => setIsOpen(true)}
         style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          width: '56px',
-          height: '56px',
-          borderRadius: '50%',
+          position: 'fixed', bottom: '24px', right: '24px',
+          width: '56px', height: '56px', borderRadius: '50%',
           background: 'linear-gradient(135deg, #0d9488, #4f46e5)',
-          color: '#fff',
-          border: 'none',
-          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 9999,
-          transition: 'transform 0.2s',
+          color: '#fff', border: 'none',
+          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', zIndex: 9999, transition: 'transform 0.2s'
         }}
         onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.08)')}
         onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-        title="Google Voice Assistant"
+        title="MedFlow Voice Assistant"
       >
         <Mic size={24} />
       </button>
 
       {isOpen && (
         <div style={{
-          position: 'fixed',
-          bottom: '90px',
-          right: '24px',
-          width: '380px',
-          maxHeight: '560px',
-          background: '#ffffff',
-          borderRadius: '16px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          position: 'fixed', bottom: '90px', right: '24px',
+          width: '390px', maxHeight: '580px',
+          background: '#ffffff', borderRadius: '16px',
+          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)',
           border: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          zIndex: 9999,
-          overflow: 'hidden',
-          fontFamily: 'sans-serif'
+          display: 'flex', flexDirection: 'column',
+          zIndex: 9999, overflow: 'hidden', fontFamily: 'sans-serif'
         }}>
+          {/* Header */}
           <div style={{
             background: 'linear-gradient(135deg, #0d9488, #4f46e5)',
-            color: '#ffffff',
-            padding: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
+            color: '#ffffff', padding: '16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sparkles size={18} />
-              <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Google Voice Assistant</span>
+              <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>MedFlow Voice Assistant</span>
             </div>
-            <button
-              onClick={handleClose}
-              style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.8 }}
-            >
+            <button onClick={handleClose} style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.8 }}>
               <X size={18} />
             </button>
           </div>
 
           <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, overflowY: 'auto' }}>
+            {/* Language selector */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
               <span style={{ color: '#64748b', fontWeight: 600 }}>Input Language:</span>
               <select
                 value={assistantLang}
                 onChange={(e) => setAssistantLang(e.target.value as AssistantLanguageCode)}
-                style={{
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  padding: '2px 6px',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
+                style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '2px 6px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
               >
                 <option value="en">English (India)</option>
                 <option value="hi">हिंदी (Hindi)</option>
@@ -451,26 +374,22 @@ export const VoiceAssistant: React.FC = () => {
               </select>
             </div>
 
+            {/* Quick Chips */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Quick Preset Chips:</span>
+              <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>Quick Chips:</span>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {presetChips.map((chip, idx) => (
                   <button
                     key={idx}
                     onClick={() => handlePresetClick(chip)}
                     style={{
-                      background: '#f1f5f9',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '12px',
-                      padding: '4px 10px',
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      color: '#334155',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s'
+                      background: '#f1f5f9', border: '1px solid #cbd5e1',
+                      borderRadius: '12px', padding: '4px 10px',
+                      fontSize: '0.72rem', fontWeight: 600, color: '#334155',
+                      cursor: 'pointer', transition: 'background 0.2s'
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#e2e8f0')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = '#f1f5f9')}
                   >
                     {chip.label}
                   </button>
@@ -478,6 +397,7 @@ export const VoiceAssistant: React.FC = () => {
               </div>
             </div>
 
+            {/* Conversation area */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minHeight: '120px', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
               <div style={{ fontSize: '0.8rem', color: '#64748b', fontStyle: 'italic', textAlign: 'center', padding: '4px' }}>
                 {mapLangToText(status, assistantLang)}
@@ -510,31 +430,19 @@ export const VoiceAssistant: React.FC = () => {
             </div>
           </div>
 
+          {/* Mic button */}
           <div style={{
-            borderTop: '1px solid #e2e8f0',
-            padding: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#fafafa',
-            gap: '10px'
+            borderTop: '1px solid #e2e8f0', padding: '16px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', background: '#fafafa', gap: '10px'
           }}>
             <button
               onClick={isRecording ? stopRecording : startRecording}
               style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                border: 'none',
+                width: '60px', height: '60px', borderRadius: '50%', border: 'none',
                 background: isRecording ? '#ef4444' : 'linear-gradient(135deg, #0d9488, #4f46e5)',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                transition: 'background-color 0.2s'
+                color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', transition: 'background-color 0.2s'
               }}
             >
               {isRecording ? <MicOff size={26} /> : <Mic size={26} />}

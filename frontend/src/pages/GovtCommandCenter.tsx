@@ -293,16 +293,12 @@ export const GovtCommandCenter: React.FC = () => {
                   ) : (
                     <button
                       onClick={async () => {
-                        const vehicle = `TN-19-EM-4${Math.floor(100 + Math.random() * 900)}`;
-                        await updateFirestoreDoc('medicines', med.id, {
-                          isRestocking: true,
-                          restockEta: 45,
-                          vehicle: vehicle
-                        });
                         try {
+                          // Backend API handles BOTH SQLite + Firestore atomically
                           await api.dispatchMedicineResupply(med.hospital_id || 1, med.med_id || med.id);
                         } catch (err) {
-                          console.error("Failed to log resupply dispatch on backend:", err);
+                          console.error("Failed to dispatch resupply:", err);
+                          alert("Dispatch failed. Please try again.");
                         }
                       }}
                       className={`btn btn-xs ${isLow ? 'btn-primary animate-pulse' : 'btn-secondary'}`}

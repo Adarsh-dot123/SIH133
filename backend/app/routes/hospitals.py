@@ -300,15 +300,29 @@ async def dispatch_medicine_resupply(
         raise HTTPException(status_code=404, detail="Hospital not found")
         
     vehicle_id = f"TN-19-EM-4{random.randint(100, 999)}"
+    RESTOCK_SECONDS = 60  # 60 second delivery timer
     
     # Update local SQLite database state
     doc_id = f"{hospital_id}_{med_id}"
     mi = db.query(MedicineInventory).filter(MedicineInventory.id == doc_id).first()
     if mi:
         mi.is_restocking = True
-        mi.restock_eta = 45
+        mi.restock_eta = RESTOCK_SECONDS
         mi.vehicle = vehicle_id
         db.commit()
+    
+    # Also update Firestore immediately so the frontend timer reflects the backend value
+    try:
+        from app.services.excel_watcher import init_firebase_admin
+        fs = init_firebase_admin()
+        if fs:
+            fs.collection("medicines").document(doc_id).update({
+                "isRestocking": True,
+                "restockEta": RESTOCK_SECONDS,
+                "vehicle": vehicle_id
+            })
+    except Exception as fe:
+        print(f"⚠️ Could not sync dispatch to Firestore: {fe}")
     
     # Blockchain Audit Log
     audit_service.log_action(
@@ -333,5 +347,6 @@ async def dispatch_medicine_resupply(
 
     return {
         "message": "Medicine resupply dispatch logged in blockchain audit trail and broadcast successfully",
-        "vehicle": vehicle_id
+        "vehicle": vehicle_id,
+        "restock_eta": RESTOCK_SECONDS
     }
