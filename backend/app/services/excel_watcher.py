@@ -288,6 +288,57 @@ def sync_excel_to_databases():
     except Exception as e:
         logger.error(f"❌ Excel parsing/sync failed: {e}")
 
+def update_google_sheet_cell(hospital_id: int, med_id: str, value: int):
+    import os
+    from app.config import settings
+    gsheet_url = settings.GOOGLE_SHEET_URL
+    spreadsheet_id = extract_spreadsheet_id(gsheet_url) if gsheet_url else None
+    if not spreadsheet_id:
+        return
+
+    cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY", "firebase_service_account.json")
+    if not os.path.exists(cred_path):
+        return
+
+    try:
+        from google.oauth2 import service_account
+        from google.auth.transport.requests import AuthorizedSession
+        
+        credentials = service_account.Credentials.from_service_account_file(
+            cred_path,
+            scopes=["https://www.googleapis.com/auth/spreadsheets"]
+        )
+        authed_session = AuthorizedSession(credentials)
+        
+        med_id_to_col = {
+            "1": "T",
+            "2": "U",
+            "3": "V",
+            "4": "W",
+            "5": "X",
+            "6": "Y",
+            "7": "Z"
+        }
+        col_letter = med_id_to_col.get(med_id)
+        if not col_letter:
+            return
+            
+        row_num = hospital_id + 1
+        range_name = f"Sheet1!{col_letter}{row_num}"
+        
+        url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{range_name}?valueInputOption=USER_ENTERED"
+        payload = {
+            "range": range_name,
+            "values": [[value]]
+        }
+        res = authed_session.put(url, json=payload)
+        if res.status_code == 200:
+            print(f"📊 Successfully updated Google Sheet cell {range_name} to {value}")
+        else:
+            print(f"❌ Failed to update Google Sheet cell: {res.text}")
+    except Exception as e:
+        print(f"❌ Error updating Google Sheet cell: {e}")
+
 async def tick_sqlite_medicine_timers():
     while True:
         await asyncio.sleep(1)
@@ -302,6 +353,23 @@ async def tick_sqlite_medicine_timers():
                     mi.restock_eta = 0
                     mi.vehicle = ""
                     mi.stock_level = 95.0
+                    
+                    # Update Firestore
+                    try:
+                        fs = init_firebase_admin()
+                        if fs:
+                            doc_id = f"{mi.hospital_id}_{mi.med_id}"
+                            fs.collection("medicines").document(doc_id).update({
+                                "stockLevel": 95,
+                                "isRestocking": False,
+                                "restockEta": 0,
+                                "vehicle": ""
+                            })
+                    except Exception as fs_err:
+                        pass
+
+                    # Write back to Google Sheets!
+                    update_google_sheet_cell(mi.hospital_id, mi.med_id, 95)
             db.commit()
         except Exception as e:
             pass
