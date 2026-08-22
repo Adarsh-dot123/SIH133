@@ -220,7 +220,10 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
             if has_blood_cols:
                 firestore_payload["blood_inventory"] = blood_inv_list
 
-            doc_ref.set(firestore_payload, merge=True)
+            try:
+                doc_ref.set(firestore_payload, merge=True)
+            except Exception as fe:
+                logger.error(f"⚠️ Firestore hospital sync skipped due to quota/connection: {fe}")
 
             med_columns_map = {
                 "med_antivenom": {"name": "Snake Antivenom", "category": "Lifesaving Venom Immunoglobulin", "minThreshold": 30, "med_id": "1", "burnRate": 1.8},
