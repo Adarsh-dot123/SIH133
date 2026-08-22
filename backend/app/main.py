@@ -18,6 +18,8 @@ from app.routes.iot import router as iot_router
 from app.routes.audit import router as audit_router
 from app.routes.abdm import router as abdm_router
 from app.routes.rural_access import router as rural_router
+from app.routes.voice import router as voice_router
+from app.routes.reports import router as reports_router
 from app.routes.ws import ws_router
 
 @asynccontextmanager
@@ -25,8 +27,15 @@ async def lifespan(app: FastAPI):
     # Ensure database tables exist and seed initial demo data
     print("Starting up MedFlow backend...")
     seed_database()
+    
+    import asyncio
+    from app.services.excel_watcher import start_excel_watcher_task
+    # Start Excel watcher background loop
+    watcher_task = asyncio.create_task(start_excel_watcher_task())
+    
     yield
     print("Shutting down MedFlow backend...")
+    watcher_task.cancel()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -38,7 +47,7 @@ app = FastAPI(
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow any origin for local dev/demo
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,6 +66,8 @@ app.include_router(iot_router, prefix=settings.API_V1_STR)
 app.include_router(audit_router, prefix=settings.API_V1_STR)
 app.include_router(abdm_router, prefix=settings.API_V1_STR)
 app.include_router(rural_router, prefix=settings.API_V1_STR)
+app.include_router(voice_router, prefix=settings.API_V1_STR)
+app.include_router(reports_router, prefix=settings.API_V1_STR)
 app.include_router(ws_router) # WebSocket at /ws/live
 
 @app.get("/")

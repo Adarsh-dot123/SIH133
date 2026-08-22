@@ -3,6 +3,7 @@ import { UserRole, User } from './types';
 import { Navbar } from './components/Navbar';
 import { NotificationToast, ToastMessage } from './components/NotificationToast';
 import { UssdSimulatorModal } from './components/UssdSimulatorModal';
+import { VoiceAssistant } from './components/VoiceAssistant';
 import { AccessDeniedView } from './components/AccessDeniedView';
 import { LoginPage } from './pages/LoginPage';
 import { PatientPortal } from './pages/PatientPortal';
@@ -13,11 +14,15 @@ import { IoTMonitorPage } from './pages/IoTMonitorPage';
 import { AuditTrailPage } from './pages/AuditTrailPage';
 import { ABDMAdapterPage } from './pages/ABDMAdapterPage';
 import { UserRegistryPage } from './pages/UserRegistryPage';
+import { SecondOpinion } from './pages/SecondOpinion';
 import { api, createWebSocketSubscriber } from './api/client';
+import { onPatientAuthStateChanged, logoutUser } from './firebase';
+import { AuthModal } from './components/AuthModal';
+import { HospitalAdminModal } from './components/HospitalAdminModal';
 
 // Strict Role-Based Access Control mapping
 const ROLE_ALLOWED_TABS: Record<UserRole, string[]> = {
-  PATIENT: ['patient-search', 'patient-referral', 'login'],
+  PATIENT: ['patient-search', 'patient-referral', 'second-opinion', 'login'],
   HOSPITAL_STAFF: ['hospital-dashboard', 'clinical-turnover', 'abdm-hub', 'login'],
   GOVT_ADMIN: ['govt-overview', 'digital-twin', 'iot-monitor', 'audit-trail', 'user-registry', 'login'],
 };
@@ -36,7 +41,10 @@ export function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isUssdOpen, setIsUssdOpen] = useState<boolean>(false);
 
-  // Check existing auth token on boot
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
+
+  // Check existing auth token and Firebase Auth on boot
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -52,7 +60,30 @@ export function App() {
       }
     };
     checkAuth();
-  }, []);
+
+    // Persist and listen to Firebase auth state changes
+    const unsubscribeFirebase = onPatientAuthStateChanged((fireUser) => {
+      if (fireUser) {
+        const patientUser: User = {
+          id: fireUser.uid,
+          email: fireUser.email,
+          full_name: fireUser.displayName || 'Patient User',
+          role: 'PATIENT'
+        };
+        setCurrentUser(patientUser);
+        setCurrentRole('PATIENT');
+      } else {
+        // Only log out if currently in PATIENT portal to prevent kicking out staff/govt logins
+        if (currentRole === 'PATIENT') {
+          setCurrentUser(null);
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeFirebase();
+    };
+  }, [currentRole]);
 
   // WebSocket Live Updates
   useEffect(() => {
@@ -111,6 +142,7 @@ export function App() {
 
   const handleLogout = () => {
     api.logout();
+    logoutUser();
     setCurrentUser(null);
     setActiveTab('login');
   };
@@ -135,8 +167,15 @@ export function App() {
         onTabChange={setActiveTab}
         isWsConnected={isWsConnected}
         onOpenUssd={() => setIsUssdOpen(true)}
-        onOpenLogin={() => setActiveTab('login')}
+        onOpenLogin={() => {
+          if (currentRole === 'PATIENT') {
+            setIsAuthOpen(true);
+          } else {
+            setActiveTab('login');
+          }
+        }}
         onLogout={handleLogout}
+        onOpenAdmin={() => setIsAdminOpen(true)}
       />
 
       {/* Main View Area with RBAC Enforcement */}
@@ -166,6 +205,7 @@ export function App() {
         {/* Patient Portal Views (PATIENT ONLY) */}
         {isTabPermitted && activeTab === 'patient-search' && <PatientPortal initialTab="search" />}
         {isTabPermitted && activeTab === 'patient-referral' && <PatientPortal initialTab="referral" />}
+        {isTabPermitted && activeTab === 'second-opinion' && <SecondOpinion />}
 
         {/* Hospital Staff Views (HOSPITAL_STAFF ONLY) */}
         {isTabPermitted && activeTab === 'hospital-dashboard' && <HospitalPortal />}
@@ -183,8 +223,31 @@ export function App() {
       {/* Real-time WebSocket Toasts */}
       <NotificationToast toasts={toasts} onDismiss={dismissToast} />
 
+      {/* Auth Modal for Patient Logins/Registrations */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onAuthSuccess={(user) => {
+          setCurrentUser({
+            id: user.uid,
+            email: user.email,
+            full_name: user.displayName || 'Patient User',
+            role: 'PATIENT'
+          });
+        }}
+      />
+
+      {/* Hospital Admin Live Editor (Firestore Sync) */}
+      <HospitalAdminModal
+        isOpen={isAdminOpen}
+        onClose={() => setIsAdminOpen(false)}
+      />
+
       {/* Interactive Rural USSD / SMS Simulator Modal */}
       <UssdSimulatorModal isOpen={isUssdOpen} onClose={() => setIsUssdOpen(false)} />
+
+      {/* Bhashini Voice Assistant */}
+      <VoiceAssistant />
 
       {/* Footer */}
       <footer style={{

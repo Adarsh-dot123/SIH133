@@ -2,8 +2,9 @@ import React from 'react';
 import { UserRole, User as UserType } from '../types';
 import { 
   Activity, ShieldCheck, PhoneCall, Building2, User, Landmark, 
-  Cpu, Link2, Sparkles, Radio, LogIn, LogOut, Lock, Users
+  Cpu, Link2, Sparkles, Radio, LogIn, LogOut, Lock, Users, Globe
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface NavbarProps {
   currentRole: UserRole;
@@ -15,6 +16,7 @@ interface NavbarProps {
   onOpenUssd: () => void;
   onOpenLogin: () => void;
   onLogout: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,8 +28,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   isWsConnected,
   onOpenUssd,
   onOpenLogin,
-  onLogout
+  onLogout,
+  onOpenAdmin
 }) => {
+  const { language, setLanguage, t } = useLanguage();
+
   return (
     <header className="navbar">
       <div className="navbar-inner">
@@ -60,7 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               width: '6px', height: '6px', borderRadius: '50%',
               background: isWsConnected ? '#10b981' : '#f43f5e'
             }} />
-            {isWsConnected ? 'Live Real-Time Sync' : 'Reconnecting...'}
+            {isWsConnected ? t('live_real_time_sync', 'Live Real-Time Sync') : t('reconnecting', 'Reconnecting...')}
           </div>
         </div>
 
@@ -72,13 +77,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className={`nav-item ${activeTab === 'patient-search' ? 'active' : ''}`}
                 onClick={() => onTabChange('patient-search')}
               >
-                <Building2 size={16} /> Hospital Finder
+                <Building2 size={16} /> {t('hospital_finder', 'Hospital Finder')}
               </button>
               <button
                 className={`nav-item ${activeTab === 'patient-referral' ? 'active' : ''}`}
                 onClick={() => onTabChange('patient-referral')}
               >
-                <Sparkles size={16} /> Smart Emergency Referral
+                <Sparkles size={16} /> {t('smart_emergency_referral', 'Smart Emergency Referral')}
+              </button>
+              <button
+                className={`nav-item ${activeTab === 'second-opinion' ? 'active' : ''}`}
+                onClick={() => onTabChange('second-opinion')}
+              >
+                <Sparkles size={16} /> {t('second_opinion', 'Second Opinion / Scan Report')}
               </button>
             </>
           )}
@@ -89,19 +100,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className={`nav-item ${activeTab === 'hospital-dashboard' ? 'active' : ''}`}
                 onClick={() => onTabChange('hospital-dashboard')}
               >
-                <Building2 size={16} /> Ward & Bed Grid
+                <Building2 size={16} /> {t('ward_bed_grid', 'Ward & Bed Grid')}
               </button>
               <button
                 className={`nav-item ${activeTab === 'clinical-turnover' ? 'active' : ''}`}
                 onClick={() => onTabChange('clinical-turnover')}
               >
-                <Sparkles size={16} /> ML Turnover Engine
+                <Sparkles size={16} /> {t('ml_turnover_engine', 'ML Turnover Engine')}
               </button>
               <button
                 className={`nav-item ${activeTab === 'abdm-hub' ? 'active' : ''}`}
                 onClick={() => onTabChange('abdm-hub')}
               >
-                <Link2 size={16} /> ABDM / FHIR Standard
+                <Link2 size={16} /> {t('abdm_fhir_standard', 'ABDM / FHIR Standard')}
               </button>
             </>
           )}
@@ -112,31 +123,31 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className={`nav-item ${activeTab === 'govt-overview' ? 'active' : ''}`}
                 onClick={() => onTabChange('govt-overview')}
               >
-                <Landmark size={16} /> State Command Center
+                <Landmark size={16} /> {t('state_command_center', 'State Command Center')}
               </button>
               <button
                 className={`nav-item ${activeTab === 'digital-twin' ? 'active' : ''}`}
                 onClick={() => onTabChange('digital-twin')}
               >
-                <Cpu size={16} /> Digital Twin Simulator
+                <Cpu size={16} /> {t('digital_twin_simulator', 'Digital Twin Simulator')}
               </button>
               <button
                 className={`nav-item ${activeTab === 'iot-monitor' ? 'active' : ''}`}
                 onClick={() => onTabChange('iot-monitor')}
               >
-                <Radio size={16} /> IoT Telemetry
+                <Radio size={16} /> {t('iot_telemetry', 'IoT Telemetry')}
               </button>
               <button
                 className={`nav-item ${activeTab === 'audit-trail' ? 'active' : ''}`}
                 onClick={() => onTabChange('audit-trail')}
               >
-                <ShieldCheck size={16} /> Blockchain Audit Chain
+                <ShieldCheck size={16} /> {t('blockchain_audit_chain', 'Blockchain Audit Chain')}
               </button>
               <button
                 className={`nav-item ${activeTab === 'user-registry' ? 'active' : ''}`}
                 onClick={() => onTabChange('user-registry')}
               >
-                <Users size={16} /> User Registry
+                <Users size={16} /> {t('user_registry', 'User Registry')}
               </button>
             </>
           )}
@@ -149,12 +160,57 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Test Rural Offline USSD (*999#) & SMS Gateway"
           >
             <PhoneCall size={14} style={{ color: '#0d9488' }} />
-            <span>Rural USSD/SMS</span>
+            <span>{t('rural_ussd_sms', 'Rural USSD/SMS')}</span>
           </button>
+
+          {/* Hospital Admin Live Editor Toggle */}
+          {onOpenAdmin && (
+            <button
+              onClick={onOpenAdmin}
+              className="btn btn-secondary btn-sm"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                marginLeft: '6px',
+                borderColor: '#e2e8f0',
+                color: '#4f46e5',
+                fontWeight: 700
+              }}
+              title="Open Hospital Admin Live Editor (Firestore Sync)"
+            >
+              <ShieldCheck size={14} style={{ color: '#4f46e5' }} />
+              <span>Admin Editor</span>
+            </button>
+          )}
         </nav>
 
         {/* Stakeholder Role Badge & Account Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Language Selector Dropdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '4px 8px', borderRadius: '8px' }}>
+            <Globe size={14} style={{ color: '#64748b' }} />
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as any)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: '#334155',
+                cursor: 'pointer',
+                outline: 'none',
+                paddingRight: '4px'
+              }}
+            >
+              <option value="en">English</option>
+              <option value="hi">हिंदी</option>
+              <option value="ta">தமிழ்</option>
+              <option value="te">తెలుగు</option>
+            </select>
+          </div>
+
           {/* Active Role Indicator */}
           <div style={{
             display: 'flex',
@@ -170,7 +226,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           }}>
             <Lock size={12} />
             <span>
-              {currentRole === 'PATIENT' ? 'Patient Portal' : currentRole === 'HOSPITAL_STAFF' ? 'Hospital Staff Portal' : 'Govt Command Portal'}
+              {currentRole === 'PATIENT' ? t('patient_portal', 'Patient Portal') : currentRole === 'HOSPITAL_STAFF' ? t('hospital_staff_portal', 'Hospital Staff Portal') : t('govt_command_portal', 'Govt Command Portal')}
             </span>
           </div>
 
@@ -225,7 +281,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="Sign Out / Switch Account"
               >
                 <LogOut size={13} />
-                <span>Exit</span>
+                <span>{t('exit', 'Exit')}</span>
               </button>
             </div>
           ) : (
@@ -243,7 +299,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
             >
               <LogIn size={14} />
-              <span>Sign In / Switch Role</span>
+              <span>{t('sign_in_switch_role', 'Sign In / Switch Role')}</span>
             </button>
           )}
         </div>

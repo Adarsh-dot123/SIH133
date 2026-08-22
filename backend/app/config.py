@@ -1,5 +1,8 @@
 import os
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Settings(BaseModel):
     PROJECT_NAME: str = "MedFlow"
@@ -10,6 +13,7 @@ class Settings(BaseModel):
     
     # Database configuration - defaults to SQLite for immediate zero-config demo, supports Postgres
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./medflow.db")
+    GOOGLE_SHEET_URL: str = os.getenv("GOOGLE_SHEET_URL", "")
     
     # ML Model Config
     ML_MODEL_PATH: str = os.getenv("ML_MODEL_PATH", "app/services/discharge_model.pkl")
@@ -25,5 +29,8 @@ class Settings(BaseModel):
         "http://127.0.0.1:3000",
         "*"
     ]
+    
+    # Sarvam AI Configuration
+    SARVAM_API_KEY: str = os.getenv("SARVAM_API_KEY", "")
 
 settings = Settings()

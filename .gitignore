@@ -2,65 +2,28 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Virtual Environments
-venv/
 .venv/
+venv/
 ENV/
-env.bak/
-venv.bak/
+.pytest_cache/
+*.db
 
-# Node.js / Frontend
+# Node / Frontend
 node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/dist-ssr/
-*.local
-.npm
-.eslintcache
-
-# Vite & Bundle caches
-.vite/
-frontend/.vite/
-
-# Database & Storage
-*.sqlite3
-*.db-journal
-
-# Environment Variables & Secrets
+dist/
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Operating System & IDE
+# Firebase credentials & service keys
+*firebase_service_account.json
+firebase_service_account.json
+
+# Operating System
 .DS_Store
 Thumbs.db
-.idea/
-.vscode/*
-!.vscode/extensions.json
-*.swp
-*.swo
-*.log

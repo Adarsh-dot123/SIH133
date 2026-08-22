@@ -265,6 +265,38 @@ class ApiClient {
       body: JSON.stringify({ sender_phone: senderPhone, message_body: messageBody }),
     });
   }
+
+  // Second Opinion Medical Report Scan
+  async scanSecondOpinion(file: File, userLat?: number, userLng?: number) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const lat = userLat !== undefined ? userLat : 13.0827;
+    const lng = userLng !== undefined ? userLng : 80.2707;
+    
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    
+    const response = await fetch(`${API_BASE}/reports/second-opinion?user_lat=${lat}&user_lng=${lng}`, {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errText = await response.text();
+      try {
+        const errJson = JSON.parse(errText);
+        throw new Error(errJson.detail || 'Failed to analyze second opinion');
+      } catch (e: any) {
+        throw new Error(e.message || `HTTP ${response.status}`);
+      }
+    }
+    
+    return response.json();
+  }
 }
 
 export const api = new ApiClient();

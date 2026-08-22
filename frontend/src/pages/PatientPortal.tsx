@@ -7,12 +7,15 @@ import { HospitalSummary, HospitalReferralScore } from '../types';
 import { api } from '../api/client';
 import { PredictionBadge } from '../components/PredictionBadge';
 import { MapView } from '../components/MapView';
+import { useLanguage } from '../context/LanguageContext';
+import { subscribeCollection } from '../firebase';
 
 interface PatientPortalProps {
   initialTab?: string;
 }
 
 export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search' }) => {
+  const { t, language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'search' | 'referral'>(initialTab === 'referral' ? 'referral' : 'search');
   const [hospitals, setHospitals] = useState<HospitalSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -20,6 +23,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
   const [pmjayOnly, setPmjayOnly] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedHospital, setSelectedHospital] = useState<HospitalSummary | null>(null);
+  const [ambulances, setAmbulances] = useState<any[]>([]);
 
   // Referral Request State
   const [patientName, setPatientName] = useState<string>('Ramesh Sundaram');
@@ -32,6 +36,80 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
   const [rankedResults, setRankedResults] = useState<HospitalReferralScore[]>([]);
   const [isScoring, setIsScoring] = useState<boolean>(false);
   const [dispatchedReferral, setDispatchedReferral] = useState<any | null>(null);
+
+  useEffect(() => {
+    const handleVoiceFilter = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.specialty !== undefined) {
+        setSelectedSpecialty(customEvent.detail.specialty);
+        setActiveSubTab('search');
+      }
+    };
+    window.addEventListener('medflow-voice-filter', handleVoiceFilter);
+    return () => {
+      window.removeEventListener('medflow-voice-filter', handleVoiceFilter);
+    };
+  }, []);
+
+  // Firestore real-time dynamic sync for hospital resources and ambulance movements
+  useEffect(() => {
+    const unsubHospitals = subscribeCollection('hospitals', (fireHospitals) => {
+      if (fireHospitals && fireHospitals.length > 0) {
+        setHospitals((prev) => {
+          return prev.map(h => {
+            const match = fireHospitals.find(fh => String(fh.id) === String(h.id) || fh.name === h.name);
+            if (match) {
+              return {
+                ...h,
+                general_beds_available: match.general_beds_available ?? h.general_beds_available,
+                icu_beds_available: match.icu_beds_available ?? h.icu_beds_available,
+                ventilators_available: match.ventilators_available ?? h.ventilators_available,
+                oxygen_beds_available: match.oxygen_beds_available ?? h.oxygen_beds_available,
+                doctors_on_duty: match.doctors_on_duty ?? h.doctors_on_duty,
+                status: match.status ?? h.status
+              };
+            }
+            return h;
+          });
+        });
+
+        setSelectedHospital((prev) => {
+          if (!prev) return null;
+          const match = fireHospitals.find(fh => String(fh.id) === String(prev.id) || fh.name === prev.name);
+          if (match) {
+            return {
+              ...prev,
+              general_beds_available: match.general_beds_available ?? prev.general_beds_available,
+              icu_beds_available: match.icu_beds_available ?? prev.icu_beds_available,
+              ventilators_available: match.ventilators_available ?? prev.ventilators_available,
+              oxygen_beds_available: match.oxygen_beds_available ?? prev.oxygen_beds_available,
+              doctors_on_duty: match.doctors_on_duty ?? prev.doctors_on_duty,
+              status: match.status ?? prev.status
+            };
+          }
+          return prev;
+        });
+      }
+    });
+
+    const unsubAmbulances = subscribeCollection('ambulances', (fireAmbulances) => {
+      const formatted = fireAmbulances.map(amb => ({
+        id: amb.id || amb.registration_number || 'AMB',
+        registration_number: amb.registration_number || amb.id || 'TN-01-EM-1001',
+        current_lat: amb.lat || amb.current_lat || 13.05,
+        current_lng: amb.lng || amb.current_lng || 80.25,
+        status: amb.status || 'available',
+        driver_name: amb.driver_name || 'Kumar',
+        driver_phone: amb.driver_phone || '+91 99999 88888'
+      }));
+      setAmbulances(formatted);
+    });
+
+    return () => {
+      unsubHospitals();
+      unsubAmbulances();
+    };
+  }, []);
 
   useEffect(() => {
     loadHospitals();
@@ -126,13 +204,13 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             fontWeight: 700, marginBottom: '10px'
           }}>
             <Sparkles size={14} style={{ color: '#5eead4' }} />
-            Predictive Bed Turnover Engine Active
+            {t('predictive_engine_active', 'Predictive Bed Turnover Engine Active')}
           </div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 800, lineHeight: 1.2, marginBottom: '8px' }}>
-            Find & Reserve Hospital Beds Across India in Real Time
+            {t('find_reserve_beds_title', 'Find & Reserve Hospital Beds Across India in Real Time')}
           </h1>
           <p style={{ fontSize: '0.92rem', opacity: 0.9 }}>
-            MedFlow forecasts beds likely to become available within <strong>12 to 24 hours</strong> using ML length-of-stay algorithms, preventing emergency patient bouncing.
+            {t('medflow_forecast_desc', 'MedFlow forecasts beds likely to become available within 12 to 24 hours using ML length-of-stay algorithms, preventing emergency patient bouncing.')}
           </p>
         </div>
 
@@ -142,7 +220,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             className={`btn ${activeSubTab === 'search' ? 'btn-primary' : 'btn-secondary'}`}
             style={{ padding: '10px 18px' }}
           >
-            <Search size={16} /> Search Hospitals
+            <Search size={16} /> {t('search_hospitals', 'Search Hospitals')}
           </button>
           <button
             onClick={() => {
@@ -152,7 +230,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             className={`btn ${activeSubTab === 'referral' ? 'btn-predict' : 'btn-secondary'}`}
             style={{ padding: '10px 18px' }}
           >
-            <Sparkles size={16} /> Smart Emergency Referral
+            <Sparkles size={16} /> {t('smart_emergency_referral', 'Smart Emergency Referral')}
           </button>
         </div>
       </div>
@@ -168,7 +246,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search hospital name or locality..."
+                  placeholder={t('search_placeholder', 'Search by name, district, or specialty...')}
                   className="form-input"
                   style={{ paddingLeft: '36px', width: '100%' }}
                 />
@@ -180,7 +258,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                 className="form-select"
                 style={{ flex: '0 1 200px' }}
               >
-                <option value="">All Specialties</option>
+                <option value="">{t('all_specialties', 'All Specialties')}</option>
                 <option value="Cardiology">Cardiology / CCU</option>
                 <option value="Neurology">Neurology / Stroke</option>
                 <option value="Pulmonology">Pulmonology / Resp</option>
@@ -197,11 +275,11 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                   onChange={(e) => setPmjayOnly(e.target.checked)}
                   style={{ accentColor: '#0d9488', width: '16px', height: '16px' }}
                 />
-                <span>Ayushman Bharat (PMJAY) Empanelled</span>
+                <span>{t('ayushman_eligible', 'Ayushman Bharat / PM-JAY Eligible Only')}</span>
               </label>
 
               <button type="submit" className="btn btn-primary" style={{ minWidth: '110px' }}>
-                Search
+                {t('search_hospitals', 'Search')}
               </button>
             </form>
           </div>
@@ -212,20 +290,20 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#475569' }}>
-                  {hospitals.length} Hospitals Found in Tamil Nadu & Karnataka
+                  {hospitals.length} {t('hospitals_found_prefix', 'Hospitals Found in')} Tamil Nadu & Karnataka
                 </span>
                 <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                  Showing Real-Time & 12h/24h Forecasted Capacity
+                  {t('showing_real_time_capacity', 'Showing Real-Time & 12h/24h Forecasted Capacity')}
                 </span>
               </div>
 
               {isLoading ? (
                 <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-                  Loading real-time hospital resource matrix...
+                  {t('loading_resource_matrix', 'Loading real-time hospital resource matrix...')}
                 </div>
               ) : hospitals.length === 0 ? (
                 <div className="card" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-                  No hospitals match the selected criteria. Try removing specialty or insurance filters.
+                  {t('no_hospitals_match', 'No hospitals match the selected criteria. Try removing specialty or insurance filters.')}
                 </div>
               ) : (
                 hospitals.map((hosp) => {
@@ -268,28 +346,28 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                         borderRadius: '10px', margin: '12px 0', border: '1px solid #e2e8f0'
                       }}>
                         <div>
-                          <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>General</div>
+                          <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{t('general', 'GENERAL')}</div>
                           <div style={{ fontSize: '0.95rem', fontWeight: 800, color: hosp.general_beds_available > 0 ? '#059669' : '#e11d48' }}>
                             {hosp.general_beds_available} <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>/ {hosp.general_beds_total}</span>
                           </div>
                         </div>
 
                         <div>
-                          <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>ICU Beds</div>
+                          <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{t('icu_beds_cap', 'ICU BEDS')}</div>
                           <div style={{ fontSize: '0.95rem', fontWeight: 800, color: hosp.icu_beds_available > 0 ? '#059669' : '#e11d48' }}>
                             {hosp.icu_beds_available} <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>/ {hosp.icu_beds_total}</span>
                           </div>
                         </div>
 
                         <div>
-                          <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Ventilators</div>
+                          <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{t('ventilators', 'VENTILATORS')}</div>
                           <div style={{ fontSize: '0.95rem', fontWeight: 800, color: hosp.ventilators_available > 0 ? '#059669' : '#e11d48' }}>
                             {hosp.ventilators_available} <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>/ {hosp.ventilators_total}</span>
                           </div>
                         </div>
 
                         <div>
-                          <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Oxygen Beds</div>
+                          <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{t('oxygen_beds', 'OXYGEN BEDS')}</div>
                           <div style={{ fontSize: '0.95rem', fontWeight: 800, color: hosp.oxygen_beds_available > 0 ? '#059669' : '#e11d48' }}>
                             {hosp.oxygen_beds_available} <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>/ {hosp.oxygen_beds_total}</span>
                           </div>
@@ -324,10 +402,11 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="card">
                 <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>
-                  Live Geographic Resource Map
+                  {t('live_map', 'Live Geographic Resource Map')}
                 </h3>
                 <MapView
                   hospitals={hospitals}
+                  ambulances={ambulances}
                   center={selectedHospital ? [selectedHospital.latitude, selectedHospital.longitude] : [13.0500, 80.2500]}
                   zoom={12}
                   onSelectHospital={(h) => setSelectedHospital(h)}
@@ -389,7 +468,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4f46e5', marginBottom: '12px' }}>
               <Sparkles size={20} />
               <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
-                Multi-Criteria Referral Matcher
+                {t('routing_title', 'Multi-Criteria Emergency Patient Routing')}
               </h2>
             </div>
             <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '18px' }}>
@@ -397,7 +476,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             </p>
 
             <div className="form-group">
-              <label className="form-label">Patient Full Name</label>
+              <label className="form-label">{t('patient_name', 'Patient Full Name')}</label>
               <input
                 type="text"
                 value={patientName}
@@ -408,7 +487,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div className="form-group">
-                <label className="form-label">Patient Age</label>
+                <label className="form-label">{t('patient_age', 'Patient Age')}</label>
                 <input
                   type="number"
                   value={patientAge}
@@ -434,7 +513,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             </div>
 
             <div className="form-group">
-              <label className="form-label">Required Clinical Specialty</label>
+              <label className="form-label">{t('required_specialty', 'Required Clinical Specialty')}</label>
               <select
                 value={refSpecialty}
                 onChange={(e) => setRefSpecialty(e.target.value)}
@@ -451,7 +530,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             </div>
 
             <div className="form-group">
-              <label className="form-label">Patient Origin Location (GPS)</label>
+              <label className="form-label">{t('origin_location', 'Patient Origin Location (GPS)')}</label>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input
                   type="text"
@@ -480,7 +559,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
               disabled={isScoring}
               style={{ width: '100%', marginTop: '10px' }}
             >
-              {isScoring ? 'Computing Multi-Factor Scores...' : 'Find Ranked Referral Hospitals'}
+              {isScoring ? 'Computing Multi-Factor Scores...' : t('find_ranked_hospitals', 'Find Ranked Referral Hospitals')}
             </button>
 
             {dispatchedReferral && (
