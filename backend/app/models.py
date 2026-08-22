@@ -298,3 +298,35 @@ class MedicineInventory(Base):
     last_updated = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     hospital = relationship("Hospital", back_populates="medicine_inventories")
+
+
+class DoctorProfile(Base):
+    __tablename__ = "doctor_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    specialization = Column(String(100), nullable=False)
+    hospital_name = Column(String(200), default="")
+    peer_id = Column(String(100), nullable=True)
+    is_available = Column(Boolean, default=True)
+
+    user = relationship("User", backref="doctor_profile")
+
+
+class PatientComplaint(Base):
+    __tablename__ = "patient_complaints"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    patient_name = Column(String(120), nullable=False)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=False)
+    specialization_needed = Column(String(100), nullable=False, default="General Medicine")
+    status = Column(String(30), default="OPEN")
+    assigned_doctor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    patient = relationship("User", foreign_keys=[patient_id], backref="complaints")
+    assigned_doctor = relationship("User", foreign_keys=[assigned_doctor_id])
+

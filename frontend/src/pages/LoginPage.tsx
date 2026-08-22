@@ -18,8 +18,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Login form state
-  const [email, setEmail] = useState<string>('patient@medflow.in');
-  const [password, setPassword] = useState<string>('patient123');
+  const [email, setEmail] = useState<string>('ramesh@patient.in');
+  const [password, setPassword] = useState<string>('Patient@123');
   const [abhaId, setAbhaId] = useState<string>('14-8921-4456-7890');
   const [authMethod, setAuthMethod] = useState<'PASSWORD' | 'ABHA'>('PASSWORD');
 
@@ -44,16 +44,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
     setErrorMsg(null);
     setSuccessMsg(null);
     if (role === 'PATIENT') {
-      setEmail('patient@medflow.in');
-      setPassword('patient123');
+      setEmail('ramesh@patient.in');
+      setPassword('Patient@123');
       setAuthMethod('PASSWORD');
     } else if (role === 'HOSPITAL_STAFF') {
-      setEmail('staff@medflow.in');
-      setPassword('staff123');
+      setEmail('dr.arun@apollo.in');
+      setPassword('Doctor@123');
       setAuthMethod('PASSWORD');
     } else if (role === 'GOVT_ADMIN') {
-      setEmail('admin@medflow.in');
-      setPassword('admin123');
+      setEmail('admin@medflow.gov.in');
+      setPassword('Admin@123');
       setAuthMethod('PASSWORD');
     }
   };
@@ -210,6 +210,50 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
                   ))}
                 </div>
               )}
+
+              {/* Preset Accounts Bar */}
+              <div style={{ marginBottom: '18px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                  ⚡ Quick Demo Accounts (Click to Fill)
+                </div>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {[
+                    { label: '🏛️ Govt Admin', em: 'admin@medflow.gov.in', pw: 'Admin@123', role: 'GOVT_ADMIN' as UserRole },
+                    { label: '👨‍⚕️ Dr. Arun (Cardio)', em: 'dr.arun@apollo.in', pw: 'Doctor@123', role: 'HOSPITAL_STAFF' as UserRole },
+                    { label: '👩‍⚕️ Dr. Priya (Pedia)', em: 'dr.priya@fortis.in', pw: 'Doctor@123', role: 'HOSPITAL_STAFF' as UserRole },
+                    { label: '👨‍⚕️ Dr. Rajan (Neuro)', em: 'dr.rajan@kamaraj.in', pw: 'Doctor@123', role: 'HOSPITAL_STAFF' as UserRole },
+                    { label: '👩‍⚕️ Dr. Meena (Pulmo)', em: 'dr.meena@nehru.in', pw: 'Doctor@123', role: 'HOSPITAL_STAFF' as UserRole },
+                    { label: '👨‍⚕️ Dr. Vikram (Nephro)', em: 'dr.vikram@gandhi.in', pw: 'Doctor@123', role: 'HOSPITAL_STAFF' as UserRole },
+                    { label: '🧑 Ramesh (Patient)', em: 'ramesh@patient.in', pw: 'Patient@123', role: 'PATIENT' as UserRole },
+                    { label: '🧑 Kavya (Patient)', em: 'kavya@patient.in', pw: 'Patient@123', role: 'PATIENT' as UserRole },
+                    { label: '🧑 Arjun (Patient)', em: 'arjun@patient.in', pw: 'Patient@123', role: 'PATIENT' as UserRole },
+                  ].map((acc) => (
+                    <button
+                      key={acc.em}
+                      type="button"
+                      onClick={() => {
+                        setSelectedRole(acc.role);
+                        setEmail(acc.em);
+                        setPassword(acc.pw);
+                        setAuthMethod('PASSWORD');
+                      }}
+                      style={{
+                        background: email === acc.em ? '#0d9488' : '#ffffff',
+                        color: email === acc.em ? '#ffffff' : '#334155',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        padding: '4px 8px',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {acc.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <form onSubmit={handleLogin}>
                 {authMethod === 'ABHA' && selectedRole === 'PATIENT' ? (

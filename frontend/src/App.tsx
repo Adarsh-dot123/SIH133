@@ -20,11 +20,14 @@ import { api, createWebSocketSubscriber } from './api/client';
 import { onPatientAuthStateChanged, logoutUser } from './firebase';
 import { AuthModal } from './components/AuthModal';
 import { HospitalAdminModal } from './components/HospitalAdminModal';
+import { DoctorDashboard } from './pages/DoctorDashboard';
+import { VideoCallModal } from './components/VideoCallModal';
+import { usePeerCall } from './hooks/usePeerCall';
 
 // Strict Role-Based Access Control mapping
 const ROLE_ALLOWED_TABS: Record<UserRole, string[]> = {
   PATIENT: ['medicine-tracker', 'patient-search', 'second-opinion', 'rural-gateway', 'login'],
-  HOSPITAL_STAFF: ['hospital-dashboard', 'abdm-hub', 'login'],
+  HOSPITAL_STAFF: ['hospital-dashboard', 'doctor-consultations', 'abdm-hub', 'login'],
   GOVT_ADMIN: ['govt-overview', 'digital-twin', 'iot-monitor', 'audit-trail', 'user-registry', 'login'],
 };
 
@@ -44,6 +47,22 @@ export function App() {
 
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
+
+  const [callerName, setCallerName] = useState<string>('Doctor / Patient');
+
+  const {
+    myPeerId, isCallActive, isIncoming, incomingCallInfo, localStream, remoteStream,
+    initPeer, callPeer, answerCall, endCall
+  } = usePeerCall((info) => {
+    setCallerName(info.doctorName || 'Doctor');
+  });
+
+  // Init PeerJS when user logs in
+  useEffect(() => {
+    if (currentUser?.email) {
+      initPeer(currentUser.email);
+    }
+  }, [currentUser, initPeer]);
 
   // Check existing auth token and Firebase Auth on boot
   useEffect(() => {
@@ -223,6 +242,20 @@ export function App() {
 
         {/* Hospital Staff Views (HOSPITAL_STAFF ONLY) */}
         {isTabPermitted && activeTab === 'hospital-dashboard' && <HospitalPortal />}
+        {isTabPermitted && activeTab === 'doctor-consultations' && (
+          <DoctorDashboard
+            doctorName={currentUser?.full_name || 'Dr. Doctor'}
+            specialization={currentUser?.department || 'Cardiology'}
+            token={localStorage.getItem('token') || undefined}
+            myPeerId={myPeerId}
+            onCallPatient={(complaint) => {
+              setCallerName(complaint.patient_name);
+              // Dial patient using peer ID scheme
+              const patientPeerId = `medflow-${complaint.patient_id}`;
+              callPeer(patientPeerId, complaint.id);
+            }}
+          />
+        )}
         {isTabPermitted && activeTab === 'abdm-hub' && <ABDMAdapterPage />}
 
         {/* Government Command Center Views (GOVT_ADMIN ONLY) */}
@@ -232,6 +265,17 @@ export function App() {
         {isTabPermitted && activeTab === 'audit-trail' && <AuditTrailPage />}
         {isTabPermitted && activeTab === 'user-registry' && <UserRegistryPage />}
       </main>
+
+      {/* ICR WebRTC Video Call Overlay */}
+      <VideoCallModal
+        isActive={isCallActive}
+        isIncoming={isIncoming}
+        localStream={localStream}
+        remoteStream={remoteStream}
+        callerName={callerName}
+        onAnswer={answerCall}
+        onEnd={endCall}
+      />
 
       {/* Real-time WebSocket Toasts */}
       <NotificationToast toasts={toasts} onDismiss={dismissToast} />

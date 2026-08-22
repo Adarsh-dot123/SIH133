@@ -110,6 +110,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Building2 size={16} /> {t('ward_bed_grid', 'Ward & Bed Grid')}
               </button>
               <button
+                className={`nav-item ${activeTab === 'doctor-consultations' ? 'active' : ''}`}
+                onClick={() => onTabChange('doctor-consultations')}
+              >
+                <PhoneCall size={16} /> Doctor Consultations (ICR)
+              </button>
+              <button
                 className={`nav-item ${activeTab === 'abdm-hub' ? 'active' : ''}`}
                 onClick={() => onTabChange('abdm-hub')}
               >

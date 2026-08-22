@@ -28,6 +28,15 @@ async def lifespan(app: FastAPI):
     print("Starting up MedFlow backend...")
     seed_database()
     
+    # Seed demo users & doctor profiles for video calls and auth
+    from app.database import SessionLocal
+    from app.services.seed_users import seed_users
+    db = SessionLocal()
+    try:
+        seed_users(db)
+    finally:
+        db.close()
+    
     import asyncio
     from app.services.excel_watcher import start_excel_watcher_task
     # Start Excel watcher background loop
@@ -53,6 +62,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.routes.complaints import router as complaints_router
+
 # Include Routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(hospitals_router, prefix=settings.API_V1_STR)
@@ -68,6 +79,7 @@ app.include_router(abdm_router, prefix=settings.API_V1_STR)
 app.include_router(rural_router, prefix=settings.API_V1_STR)
 app.include_router(voice_router, prefix=settings.API_V1_STR)
 app.include_router(reports_router, prefix=settings.API_V1_STR)
+app.include_router(complaints_router, prefix=settings.API_V1_STR)
 app.include_router(ws_router) # WebSocket at /ws/live
 
 @app.get("/")

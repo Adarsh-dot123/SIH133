@@ -65,13 +65,18 @@ import { MapView } from '../components/MapView';
 import { useLanguage } from '../context/LanguageContext';
 import { subscribeCollection } from '../firebase';
 
+import { ComplaintForm } from '../components/ComplaintForm';
+
 interface PatientPortalProps {
   initialTab?: string;
+  userToken?: string;
 }
 
-export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search' }) => {
+export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search', userToken }) => {
   const { t, language } = useLanguage();
-  const [activeSubTab, setActiveSubTab] = useState<'search' | 'referral'>(initialTab === 'referral' ? 'referral' : 'search');
+  const [activeSubTab, setActiveSubTab] = useState<'search' | 'referral' | 'consultation'>(
+    initialTab === 'referral' ? 'referral' : initialTab === 'consultation' ? 'consultation' : 'search'
+  );
   const [hospitals, setHospitals] = useState<HospitalSummary[]>([]);
   const [allHospitals, setAllHospitals] = useState<HospitalSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -428,6 +433,13 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
           >
             <Sparkles size={16} /> {t('smart_emergency_referral', 'Smart Emergency Referral')}
           </button>
+          <button
+            onClick={() => setActiveSubTab('consultation')}
+            className={`btn ${activeSubTab === 'consultation' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '10px 18px', background: activeSubTab === 'consultation' ? '#0d9488' : undefined, color: activeSubTab === 'consultation' ? '#ffffff' : undefined }}
+          >
+            <Phone size={16} /> 📹 Talk to Doctor (ICR)
+          </button>
         </div>
       </div>
 
@@ -656,7 +668,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             </div>
           </div>
         </>
-      ) : (
+      ) : activeSubTab === 'referral' ? (
         /* Smart Specialty-Aware Referral Engine View */
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '24px' }}>
           {/* Left: Input Form */}
@@ -965,7 +977,9 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             </div>
           </div>
         </div>
-      )}
+      ) : activeSubTab === 'consultation' ? (
+        <ComplaintForm patientId={1} patientName={patientName} token={userToken} />
+      ) : null}
     </div>
   );
 };
