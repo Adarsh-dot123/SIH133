@@ -143,17 +143,17 @@ export async function fetchLiveMedicines(): Promise<MedicineStock[]> {
     list = DEFAULT_MEDICINES;
   }
 
-  // 3. Apply persistent dispatched overrides (so restocked stock stays at 100% after van delivery)
+  // 3. Apply active overrides (restocking countdown or recent dispatch)
   const overrides = getDispatchedOverrides();
   return list.map(m => {
     const ov = overrides[m.id];
     if (ov) {
-      // If currently restocking, maintain ETA countdown
+      // If delivery is en-route
       if (ov.isRestocking && ov.restockEta && ov.restockEta > 0) {
         return { ...m, isRestocking: true, restockEta: ov.restockEta, vehicle: ov.vehicle };
       }
-      // If restock delivery completed, maintain replenished stock level
-      if (ov.stockLevel !== undefined && ov.stockLevel > 0) {
+      // If recently restocked and currently depleting dynamically
+      if (ov.stockLevel !== undefined) {
         return { ...m, stockLevel: ov.stockLevel, isRestocking: false, restockEta: 0 };
       }
     }

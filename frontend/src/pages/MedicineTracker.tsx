@@ -53,6 +53,25 @@ export const MedicineTracker: React.FC = () => {
     return () => clearInterval(ticker);
   }, []);
 
+  // Dynamic burn rate consumption simulation: depletes active stock by 1% every 6s
+  useEffect(() => {
+    const burnTicker = setInterval(() => {
+      setMedicines(prev => prev.map(m => {
+        if (!m.isRestocking && m.stockLevel > 0) {
+          const nextStock = Math.max(0, m.stockLevel - 1);
+          saveDispatchedOverride(m.id, {
+            stockLevel: nextStock,
+            isRestocking: false,
+            restockEta: 0
+          });
+          return { ...m, stockLevel: nextStock };
+        }
+        return m;
+      }));
+    }, 6000);
+    return () => clearInterval(burnTicker);
+  }, []);
+
 
   // Extract unique facilities for filter selector
   const facilitiesList = ['ALL', ...Array.from(new Set(medicines.map(m => m.facility)))];

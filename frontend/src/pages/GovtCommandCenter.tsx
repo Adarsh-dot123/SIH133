@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Landmark, AlertTriangle, ShieldCheck, ArrowRight, RefreshCw,
+  Landmark, AlertTriangle, AlertCircle, ShieldCheck, ArrowRight, RefreshCw,
   TrendingDown, CheckCircle, Activity, MapPin, Building, Share2,
   Wifi, WifiOff, Clock, Package, Truck
 } from 'lucide-react';
@@ -61,6 +61,25 @@ export const GovtCommandCenter: React.FC = () => {
       }));
     }, 1000);
     return () => clearInterval(ticker);
+  }, []);
+
+  // Dynamic burn rate consumption simulation: depletes active stock by 1% every 6s
+  useEffect(() => {
+    const burnTicker = setInterval(() => {
+      setMedicines(prev => prev.map(m => {
+        if (!m.isRestocking && m.stockLevel > 0) {
+          const nextStock = Math.max(0, m.stockLevel - 1);
+          saveDispatchedOverride(m.id, {
+            stockLevel: nextStock,
+            isRestocking: false,
+            restockEta: 0
+          });
+          return { ...m, stockLevel: nextStock };
+        }
+        return m;
+      }));
+    }, 6000);
+    return () => clearInterval(burnTicker);
   }, []);
 
   const handleDispatch = async (med: MedicineStock) => {
@@ -301,6 +320,54 @@ export const GovtCommandCenter: React.FC = () => {
         <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '20px' }}>
           Monitor real-time drug levels across rural health centres and dispatch emergency warehouse couriers to restore critical stocks.
         </p>
+
+        {/* Automated Low-Stock & Shortage Signals Alert Monitor */}
+        {(() => {
+          const criticalShortages = medicines.filter(m => m.stockLevel <= m.minThreshold && !m.isRestocking);
+          if (criticalShortages.length === 0) return null;
+          return (
+            <div style={{
+              background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+              border: '2px solid #ef4444',
+              borderRadius: '14px',
+              padding: '16px 20px',
+              marginBottom: '20px',
+              boxShadow: '0 4px 14px rgba(239, 68, 68, 0.15)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
+                  <AlertCircle size={18} className="animate-pulse" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: '#991b1b', margin: 0 }}>
+                    🚨 Automated Shortage Signal: {criticalShortages.length} Medicine Stocks Below Safety Threshold
+                  </h3>
+                  <p style={{ fontSize: '0.76rem', color: '#b91c1c', margin: 0, marginTop: '2px' }}>
+                    Active burn-rate consumption detected. One-click emergency courier dispatch available below:
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '8px' }}>
+                {criticalShortages.map(cs => (
+                  <div key={cs.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #fca5a5', borderRadius: '8px', padding: '8px 12px' }}>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#1e293b' }}>{cs.name}</div>
+                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{cs.facility} • <strong style={{ color: '#dc2626' }}>{cs.stockLevel}%</strong> (Min: {cs.minThreshold}%)</div>
+                    </div>
+                    <button
+                      onClick={() => handleDispatch(cs)}
+                      className="btn btn-primary btn-xs animate-pulse"
+                      style={{ padding: '4px 8px', fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap' }}
+                    >
+                      ⚡ Dispatch
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
           {medicines.map((med) => {
