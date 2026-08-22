@@ -28,7 +28,7 @@ import { usePeerCall } from './hooks/usePeerCall';
 const ROLE_ALLOWED_TABS: Record<UserRole, string[]> = {
   PATIENT: ['medicine-tracker', 'patient-search', 'second-opinion', 'rural-gateway', 'login'],
   HOSPITAL_STAFF: ['hospital-dashboard', 'doctor-consultations', 'abdm-hub', 'login'],
-  GOVT_ADMIN: ['govt-overview', 'digital-twin', 'iot-monitor', 'audit-trail', 'user-registry', 'login'],
+  GOVT_ADMIN: ['govt-overview', 'digital-twin', 'login'],
 };
 
 const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
@@ -67,7 +67,7 @@ export function App() {
   // Check existing auth token and Firebase Auth on boot
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('medflow_token');
       if (!token) {
         setActiveTab('login');
         return;
@@ -231,7 +231,7 @@ export function App() {
 
         {/* Patient Portal Views (PATIENT ONLY) */}
         {isTabPermitted && activeTab === 'medicine-tracker' && <MedicineTracker />}
-        {isTabPermitted && activeTab === 'patient-search' && <PatientPortal initialTab="search" userToken={localStorage.getItem('token') || undefined} myPeerId={myPeerId} />}
+        {isTabPermitted && activeTab === 'patient-search' && <PatientPortal initialTab="search" userToken={localStorage.getItem('medflow_token') || undefined} myPeerId={myPeerId} />}
         {isTabPermitted && activeTab === 'second-opinion' && <SecondOpinion />}
         {isTabPermitted && activeTab === 'rural-gateway' && (
           <div className="card" style={{ maxWidth: '800px', margin: '40px auto', padding: '32px', textAlign: 'center' }}>
@@ -253,7 +253,7 @@ export function App() {
           <DoctorDashboard
             doctorName={currentUser?.full_name || 'Dr. Doctor'}
             specialization={currentUser?.department || 'Cardiology'}
-            token={localStorage.getItem('token') || undefined}
+            token={localStorage.getItem('medflow_token') || undefined}
             myPeerId={myPeerId}
             onCallPatient={(complaint) => {
               setCallerName(complaint.patient_name);
@@ -267,9 +267,6 @@ export function App() {
         {/* Government Command Center Views (GOVT_ADMIN ONLY) */}
         {isTabPermitted && activeTab === 'govt-overview' && <GovtCommandCenter />}
         {isTabPermitted && activeTab === 'digital-twin' && <DigitalTwinPage />}
-        {isTabPermitted && activeTab === 'iot-monitor' && <IoTMonitorPage />}
-        {isTabPermitted && activeTab === 'audit-trail' && <AuditTrailPage />}
-        {isTabPermitted && activeTab === 'user-registry' && <UserRegistryPage />}
       </main>
 
       {/* ICR WebRTC Video Call Overlay */}

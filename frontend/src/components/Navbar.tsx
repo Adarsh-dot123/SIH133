@@ -138,24 +138,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Cpu size={16} /> {t('digital_twin_simulator', 'Digital Twin Simulator')}
               </button>
-              <button
-                className={`nav-item ${activeTab === 'iot-monitor' ? 'active' : ''}`}
-                onClick={() => onTabChange('iot-monitor')}
-              >
-                <Radio size={16} /> {t('iot_telemetry', 'IoT Telemetry')}
-              </button>
-              <button
-                className={`nav-item ${activeTab === 'audit-trail' ? 'active' : ''}`}
-                onClick={() => onTabChange('audit-trail')}
-              >
-                <ShieldCheck size={16} /> {t('blockchain_audit_chain', 'Blockchain Audit Chain')}
-              </button>
-              <button
-                className={`nav-item ${activeTab === 'user-registry' ? 'active' : ''}`}
-                onClick={() => onTabChange('user-registry')}
-              >
-                <Users size={16} /> {t('user_registry', 'User Registry')}
-              </button>
             </>
           )}
 

@@ -48,12 +48,10 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
     currentCallRef.current = call;
   };
 
-  const sessionSuffixRef = useRef<string>(Math.floor(1000 + Math.random() * 9000).toString());
-
   const initPeer = useCallback((userId: string) => {
     if (peerRef.current && !peerRef.current.destroyed) return;
     import('peerjs').then(({ default: Peer }) => {
-      const sanitizedId = `medflow-${userId.replace(/[^a-zA-Z0-9]/g, '')}-${sessionSuffixRef.current}`;
+      const sanitizedId = `medflow-${userId.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now().toString().slice(-6)}`;
       const peer = new Peer(sanitizedId, {
         config: {
           iceServers: [
