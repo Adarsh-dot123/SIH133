@@ -7,7 +7,7 @@ from app.database import engine, Base, SessionLocal
 from app.models import (
     User, UserRole, District, Hospital, Bed, OxygenInventory,
     BloodInventory, Patient, PatientStay, BedTurnoverPrediction,
-    Ambulance, DistrictAlert, AuditLog
+    Ambulance, DistrictAlert, AuditLog, MedicineInventory
 )
 from app.services.ml_engine import ml_engine
 from app.services.audit_service import audit_service
@@ -25,6 +25,40 @@ def seed_database(force_reseed: bool = False):
         existing_user_count = db.query(User).count()
         if existing_user_count > 0:
             print(f"Database already initialized ({existing_user_count} user accounts found). Keeping persistent records.")
+            # Seed medicine inventory if it's empty even if users exist
+            if db.query(MedicineInventory).count() == 0:
+                print("Seeding medicine inventories into existing database...")
+                try:
+                    hospitals = db.query(Hospital).all()
+                    med_list = [
+                        ("1", "Snake Antivenom", "Lifesaving Venom Immunoglobulin", 45, 1.8, 30),
+                        ("2", "Anti-Rabies Vaccine", "Viral Prophylaxis", 18, 2.2, 25),
+                        ("3", "Oxytocin Injection", "Maternal Care / Hemorrhage prevention", 60, 3.5, 20),
+                        ("4", "Insulin (Human Mix)", "Chronic Care / Endocrinology", 22, 1.5, 25),
+                        ("5", "IV Fluids (Normal Saline)", "Critical Care / Rehydration", 80, 6.0, 35),
+                        ("6", "Metformin 500mg", "Essential Oral Anti-diabetic", 14, 4.2, 20),
+                        ("7", "Paracetamol 650mg", "Basic Analgesic & Antipyretic", 90, 12.0, 30)
+                    ]
+                    for hosp in hospitals:
+                        for m_id, m_name, m_cat, m_stock, m_burn, m_thresh in med_list:
+                            mi = MedicineInventory(
+                                id=f"{hosp.id}_{m_id}",
+                                med_id=m_id,
+                                hospital_id=hosp.id,
+                                medicine_name=m_name,
+                                category=m_cat,
+                                stock_level=m_stock,
+                                burn_rate=m_burn,
+                                min_threshold=m_thresh,
+                                is_restocking=False,
+                                restock_eta=0,
+                                vehicle=""
+                            )
+                            db.add(mi)
+                    db.commit()
+                    print("✅ Seeding of medicine inventories completed successfully.")
+                except Exception as e:
+                    print(f"❌ Failed to seed medicine inventories: {e}")
             db.close()
             return
 
@@ -284,6 +318,32 @@ def seed_database(force_reseed: bool = False):
                     units_critical_threshold=5
                 )
                 db.add(bi)
+
+            # Add Medicine Inventories (7 Essential Drugs)
+            med_list = [
+                ("1", "Snake Antivenom", "Lifesaving Venom Immunoglobulin", 45, 1.8, 30),
+                ("2", "Anti-Rabies Vaccine", "Viral Prophylaxis", 18, 2.2, 25),
+                ("3", "Oxytocin Injection", "Maternal Care / Hemorrhage prevention", 60, 3.5, 20),
+                ("4", "Insulin (Human Mix)", "Chronic Care / Endocrinology", 22, 1.5, 25),
+                ("5", "IV Fluids (Normal Saline)", "Critical Care / Rehydration", 80, 6.0, 35),
+                ("6", "Metformin 500mg", "Essential Oral Anti-diabetic", 14, 4.2, 20),
+                ("7", "Paracetamol 650mg", "Basic Analgesic & Antipyretic", 90, 12.0, 30)
+            ]
+            for m_id, m_name, m_cat, m_stock, m_burn, m_thresh in med_list:
+                mi = MedicineInventory(
+                    id=f"{hosp.id}_{m_id}",
+                    med_id=m_id,
+                    hospital_id=hosp.id,
+                    medicine_name=m_name,
+                    category=m_cat,
+                    stock_level=m_stock,
+                    burn_rate=m_burn,
+                    min_threshold=m_thresh,
+                    is_restocking=False,
+                    restock_eta=0,
+                    vehicle=""
+                )
+                db.add(mi)
 
             # Add Beds across Wards
             # 1. General Ward (15 beds)

@@ -301,6 +301,15 @@ async def dispatch_medicine_resupply(
         
     vehicle_id = f"TN-19-EM-4{random.randint(100, 999)}"
     
+    # Update local SQLite database state
+    doc_id = f"{hospital_id}_{med_id}"
+    mi = db.query(MedicineInventory).filter(MedicineInventory.id == doc_id).first()
+    if mi:
+        mi.is_restocking = True
+        mi.restock_eta = 45
+        mi.vehicle = vehicle_id
+        db.commit()
+    
     # Blockchain Audit Log
     audit_service.log_action(
         db=db,

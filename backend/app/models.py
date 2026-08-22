@@ -88,6 +88,7 @@ class Hospital(Base):
     beds = relationship("Bed", back_populates="hospital", cascade="all, delete-orphan")
     oxygen_inventory = relationship("OxygenInventory", back_populates="hospital", uselist=False, cascade="all, delete-orphan")
     blood_inventories = relationship("BloodInventory", back_populates="hospital", cascade="all, delete-orphan")
+    medicine_inventories = relationship("MedicineInventory", back_populates="hospital", cascade="all, delete-orphan")
     ambulances = relationship("Ambulance", back_populates="hospital", cascade="all, delete-orphan")
     patient_stays = relationship("PatientStay", back_populates="hospital")
     staff_users = relationship("User", back_populates="hospital")
@@ -279,3 +280,21 @@ class ResourceSnapshot(Base):
     oxygen_tank_pct = Column(Float, default=75.0)
 
     hospital = relationship("Hospital", back_populates="snapshots")
+
+class MedicineInventory(Base):
+    __tablename__ = "medicine_inventories"
+
+    id = Column(String(50), primary_key=True, index=True) # e.g. "1_1"
+    med_id = Column(String(30), nullable=False)
+    hospital_id = Column(Integer, ForeignKey("hospitals.id"), nullable=False)
+    medicine_name = Column(String(100), nullable=False)
+    category = Column(String(150), nullable=False)
+    stock_level = Column(Float, default=50.0) # Percentage 0 - 100
+    min_threshold = Column(Float, default=20.0)
+    burn_rate = Column(Float, default=1.5)
+    is_restocking = Column(Boolean, default=False)
+    restock_eta = Column(Integer, default=0)
+    vehicle = Column(String(50), default="")
+    last_updated = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    hospital = relationship("Hospital", back_populates="medicine_inventories")

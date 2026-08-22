@@ -3,7 +3,7 @@ import asyncio
 import pandas as pd
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
-from app.models import Hospital, Bed, BedType, BedStatus, BloodInventory
+from app.models import Hospital, Bed, BedType, BedStatus, BloodInventory, MedicineInventory
 from app.config import settings
 import logging
 
@@ -92,6 +92,16 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
         "blood_ab_neg": "AB-"
     }
 
+    med_columns_map = {
+        "med_antivenom": {"name": "Snake Antivenom", "category": "Lifesaving Venom Immunoglobulin", "minThreshold": 30, "med_id": "1", "burnRate": 1.8},
+        "med_rabies": {"name": "Anti-Rabies Vaccine", "category": "Viral Prophylaxis", "minThreshold": 25, "med_id": "2", "burnRate": 2.2},
+        "med_oxytocin": {"name": "Oxytocin Injection", "category": "Maternal Care / Hemorrhage prevention", "minThreshold": 20, "med_id": "3", "burnRate": 3.5},
+        "med_insulin": {"name": "Insulin (Human Mix)", "category": "Chronic Care / Endocrinology", "minThreshold": 25, "med_id": "4", "burnRate": 1.5},
+        "med_iv": {"name": "IV Fluids (Normal Saline)", "category": "Critical Care / Rehydration", "minThreshold": 35, "med_id": "5", "burnRate": 6.0},
+        "med_metformin": {"name": "Metformin 500mg", "category": "Essential Oral Anti-diabetic", "minThreshold": 20, "med_id": "6", "burnRate": 4.2},
+        "med_paracetamol": {"name": "Paracetamol 650mg", "category": "Basic Analgesic & Antipyretic", "minThreshold": 30, "med_id": "7", "burnRate": 12.0}
+    }
+
     # 1. Sync to SQL Database (SQLite)
     db_sql = SessionLocal()
     try:
@@ -136,6 +146,27 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                                     units_critical_threshold=5
                                 )
                                 db_sql.add(bi)
+
+                # Update medicine stock level in SQLite (only if columns exist in Google Sheet)
+                for col_name, info in med_columns_map.items():
+                    if col_name in row and pd.notna(row[col_name]):
+                        med_stock_val = int(float(row[col_name]))
+                        doc_id = f"{hosp_id}_{info['med_id']}"
+                        mi = db_sql.query(MedicineInventory).filter(MedicineInventory.id == doc_id).first()
+                        if mi:
+                            mi.stock_level = med_stock_val
+                        else:
+                            mi = MedicineInventory(
+                                id=doc_id,
+                                med_id=info["med_id"],
+                                hospital_id=hosp_id,
+                                medicine_name=info["name"],
+                                category=info["category"],
+                                stock_level=med_stock_val,
+                                min_threshold=info["minThreshold"],
+                                burn_rate=info["burnRate"]
+                            )
+                            db_sql.add(mi)
         db_sql.commit()
         print("✅ SQLite database synchronized successfully.")
     except Exception as e:
@@ -257,8 +288,31 @@ def sync_excel_to_databases():
     except Exception as e:
         logger.error(f"❌ Excel parsing/sync failed: {e}")
 
+async def tick_sqlite_medicine_timers():
+    while True:
+        await asyncio.sleep(1)
+        db = SessionLocal()
+        try:
+            items = db.query(MedicineInventory).filter(MedicineInventory.is_restocking == True).all()
+            for mi in items:
+                if mi.restock_eta > 1:
+                    mi.restock_eta -= 1
+                else:
+                    mi.is_restocking = False
+                    mi.restock_eta = 0
+                    mi.vehicle = ""
+                    mi.stock_level = 95.0
+            db.commit()
+        except Exception as e:
+            pass
+        finally:
+            db.close()
+
 async def start_excel_watcher_task():
     import hashlib
+    # Start SQLite timer ticker in the background
+    asyncio.create_task(tick_sqlite_medicine_timers())
+    
     gsheet_url = settings.GOOGLE_SHEET_URL
     spreadsheet_id = extract_spreadsheet_id(gsheet_url) if gsheet_url else None
     
