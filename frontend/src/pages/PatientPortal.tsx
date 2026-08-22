@@ -70,11 +70,13 @@ interface PatientPortalProps {
 export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search' }) => {
   const [activeSubTab, setActiveSubTab] = useState<'search' | 'referral'>(initialTab === 'referral' ? 'referral' : 'search');
   const [hospitals, setHospitals] = useState<HospitalSummary[]>([]);
+  const [allHospitals, setAllHospitals] = useState<HospitalSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
   const [pmjayOnly, setPmjayOnly] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [selectedHospital, setSelectedHospital] = useState<HospitalSummary | null>(null);
+  const [selectedSearchHospital, setSelectedSearchHospital] = useState<HospitalSummary | null>(null);
+  const [selectedReferralHospital, setSelectedReferralHospital] = useState<HospitalSummary | null>(null);
   const [isLiveSync, setIsLiveSync] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -123,25 +125,37 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
     );
   };
 
+  const loadAllHospitals = async () => {
+    try {
+      const data = await api.getHospitals();
+      setAllHospitals(data);
+    } catch (err) {
+      console.error('Failed to load all hospitals', err);
+    }
+  };
+
   const loadHospitals = async (silent = false) => {
     if (!silent) {
       setIsLoading(true);
       setIsRefreshing(true);
     }
     try {
-      const data = await api.getHospitals({
-        specialty: selectedSpecialty || undefined,
-        pmjay_only: pmjayOnly,
-        search: searchQuery || undefined
-      });
-      setHospitals(data);
+      const [filteredData] = await Promise.all([
+        api.getHospitals({
+          specialty: selectedSpecialty || undefined,
+          pmjay_only: pmjayOnly,
+          search: searchQuery || undefined
+        }),
+        loadAllHospitals()
+      ]);
+      setHospitals(filteredData);
       setLastUpdated(new Date());
       if (!silent) {
         setJustRefreshed(true);
         setTimeout(() => setJustRefreshed(false), 2000);
       }
-      if (data.length > 0 && !selectedHospital) {
-        setSelectedHospital(data[0]);
+      if (filteredData.length > 0 && !selectedSearchHospital) {
+        setSelectedSearchHospital(filteredData[0]);
       }
     } catch (err) {
       console.error('Failed to load hospitals', err);
@@ -193,8 +207,21 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
       });
       setRankedResults(res);
       if (res.length > 0) {
-        const topHosp = hospitals.find(h => h.id === res[0].hospital_id);
-        if (topHosp) setSelectedHospital(topHosp);
+        let topHosp = allHospitals.find(h => h.id === res[0].hospital_id);
+        if (!topHosp) {
+          topHosp = hospitals.find(h => h.id === res[0].hospital_id);
+        }
+        if (topHosp) {
+          setSelectedReferralHospital(topHosp);
+        } else {
+          // If not found in memory, retrieve it via details call to populate selection
+          try {
+            const details = await api.getHospitalDetail(res[0].hospital_id);
+            setSelectedReferralHospital(details);
+          } catch (e) {
+            console.error('Failed to resolve recommended hospital details', e);
+          }
+        }
       }
     } catch (err: any) {
       alert('Error calculating smart referral: ' + err.message);
@@ -393,12 +420,12 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                 </div>
               ) : (
                 hospitals.map((hosp) => {
-                  const isSelected = selectedHospital?.id === hosp.id;
+                  const isSelected = selectedSearchHospital?.id === hosp.id;
                   return (
                     <div
                       key={hosp.id}
                       className="card"
-                      onClick={() => setSelectedHospital(hosp)}
+                      onClick={() => setSelectedSearchHospital(hosp)}
                       style={{
                         cursor: 'pointer',
                         borderColor: isSelected ? '#0d9488' : undefined,
@@ -492,29 +519,29 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                 </h3>
                 <MapView
                   hospitals={hospitals}
-                  center={selectedHospital ? [selectedHospital.latitude, selectedHospital.longitude] : [13.0500, 80.2500]}
+                  center={selectedSearchHospital ? [selectedSearchHospital.latitude, selectedSearchHospital.longitude] : [13.0500, 80.2500]}
                   zoom={12}
-                  onSelectHospital={(h) => setSelectedHospital(h)}
+                  onSelectHospital={(h) => setSelectedSearchHospital(h)}
                 />
               </div>
 
-              {selectedHospital && (
+              {selectedSearchHospital && (
                 <div className="card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
-                      {selectedHospital.name}
+                      {selectedSearchHospital.name}
                     </h3>
                     <span style={{
                       fontSize: '0.75rem', fontWeight: 700, padding: '3px 8px', borderRadius: '9999px',
-                      background: selectedHospital.status === 'NORMAL' ? '#ecfdf5' : '#fff1f2',
-                      color: selectedHospital.status === 'NORMAL' ? '#059669' : '#e11d48'
+                      background: selectedSearchHospital.status === 'NORMAL' ? '#ecfdf5' : '#fff1f2',
+                      color: selectedSearchHospital.status === 'NORMAL' ? '#059669' : '#e11d48'
                     }}>
-                      Status: {selectedHospital.status}
+                      Status: {selectedSearchHospital.status}
                     </span>
                   </div>
 
                   <div style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '12px' }}>
-                    <strong>Specialties Offered:</strong> {selectedHospital.specialties.join(' • ')}
+                    <strong>Specialties Offered:</strong> {selectedSearchHospital.specialties.join(' • ')}
                   </div>
 
                   <div style={{
@@ -526,7 +553,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                       AI Bed Turnover Forecast (12h - 24h)
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#3730a3', marginTop: '4px' }}>
-                      Our clinical Length-of-Stay engine projects <strong>+{selectedHospital.predicted_available_12h} total beds</strong> (+{selectedHospital.predicted_icu_available_12h} ICU) will be freed in 12 hours based on active inpatient vitals recovery trends.
+                      Our clinical Length-of-Stay engine projects <strong>+{selectedSearchHospital.predicted_available_12h} total beds</strong> (+{selectedSearchHospital.predicted_icu_available_12h} ICU) will be freed in 12 hours based on active inpatient vitals recovery trends.
                     </div>
                   </div>
 
@@ -759,10 +786,11 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                 Emergency Ambulance Route & Target Hospital
               </h3>
               <MapView
-                hospitals={hospitals}
+                hospitals={allHospitals.length > 0 ? allHospitals : hospitals}
                 origin={{ lat: originLat, lng: originLng, label: originLabel }}
-                destinationHospital={selectedHospital}
+                destinationHospital={selectedReferralHospital}
                 zoom={12}
+                onSelectHospital={(h) => setSelectedReferralHospital(h)}
               />
             </div>
 
@@ -775,10 +803,16 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                 <div
                   key={score.hospital_id}
                   className="card"
+                  onClick={() => {
+                    const hosp = allHospitals.find(h => h.id === score.hospital_id) || hospitals.find(h => h.id === score.hospital_id);
+                    if (hosp) setSelectedReferralHospital(hosp);
+                  }}
                   style={{
                     padding: '16px',
-                    borderColor: score.recommendation_rank === 1 ? '#4f46e5' : '#e2e8f0',
-                    background: score.recommendation_rank === 1 ? '#f5f3ff' : '#ffffff'
+                    cursor: 'pointer',
+                    borderColor: selectedReferralHospital?.id === score.hospital_id ? '#4f46e5' : '#e2e8f0',
+                    background: selectedReferralHospital?.id === score.hospital_id ? '#f5f3ff' : '#ffffff',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

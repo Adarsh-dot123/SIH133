@@ -116,7 +116,18 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 // ─── Map subcomponents ────────────────────────────────────────────────────────
 function MapController({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
-  useEffect(() => { map.setView(center, zoom); }, [center, zoom, map]);
+  const lastCenterRef = useRef<[number, number] | null>(null);
+
+  useEffect(() => {
+    const hasChanged = !lastCenterRef.current ||
+      lastCenterRef.current[0] !== center[0] ||
+      lastCenterRef.current[1] !== center[1];
+
+    if (hasChanged) {
+      map.setView(center, zoom);
+      lastCenterRef.current = center;
+    }
+  }, [map, center, zoom]);
   return null;
 }
 
@@ -173,13 +184,19 @@ export const MapView: React.FC<MapViewProps> = ({
   const etaMin = distanceKm ? Math.round((distanceKm / 40) * 60) : null; // ~40 km/h city speed
 
   // Derive effective center: if origin & destination both exist, center between them
-  const effectiveCenter: [number, number] =
-    origin && destinationHospital
-      ? [
-          (origin.lat + destinationHospital.latitude) / 2,
-          (origin.lng + destinationHospital.longitude) / 2,
-        ]
-      : center;
+  // Memoize the default center so it does not change on every render
+  const defaultCenter = React.useMemo(() => center as [number, number], []);
+
+  // Derive effective center: if origin & destination both exist, center between them; otherwise use memoized default
+  const effectiveCenter = React.useMemo(() => {
+    if (origin && destinationHospital) {
+      return [
+        (origin.lat + destinationHospital.latitude) / 2,
+        (origin.lng + destinationHospital.longitude) / 2,
+      ] as [number, number];
+    }
+    return defaultCenter;
+  }, [origin?.lat, origin?.lng, destinationHospital?.latitude, destinationHospital?.longitude, defaultCenter]);
 
   return (
     <div
@@ -465,7 +482,63 @@ export const MapView: React.FC<MapViewProps> = ({
               </Popup>
             </Marker>
           );
-        })}
+          })}
+
+          {/* Ensure destination hospital is rendered even if not in hospitals list */}
+          {destinationHospital && !hospitals.some((h) => h.id === destinationHospital.id) && (
+            <Marker
+              position={[destinationHospital.latitude, destinationHospital.longitude]}
+              icon={createHospitalIcon(destinationHospital.status, true)}
+              eventHandlers={{ click: () => onSelectHospital && onSelectHospital(destinationHospital) }}
+            >
+              <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+                <span style={{ fontWeight: 700 }}>{destinationHospital.name}</span>
+                {' — '}
+                <span style={{ color: destinationHospital.icu_beds_available > 0 ? '#059669' : '#e11d48' }}>
+                  {destinationHospital.icu_beds_available} ICU free
+                </span>
+              </Tooltip>
+              <Popup minWidth={220}>
+                <div style={{ padding: '4px 2px' }}>
+                  <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#0f172a', marginBottom: '4px' }}>
+                    {destinationHospital.name}
+                  </div>
+                  <div style={{ fontSize: '0.73rem', color: '#64748b', marginBottom: '6px' }}>
+                    {destinationHospital.address}
+                  </div>
+                  {/* Reuse same popup content as other markers */}
+                  <div style={{ marginBottom: '8px' }}>
+                    <span style={{
+                      fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px',
+                      borderRadius: '9999px',
+                      background: destinationHospital.status === 'CRITICAL' ? '#ffe4e6' : destinationHospital.status === 'WARNING' ? '#fef3c7' : '#ecfdf5',
+                      color: destinationHospital.status === 'CRITICAL' ? '#be123c' : destinationHospital.status === 'WARNING' ? '#92400e' : '#065f46',
+                    }}>
+                      {destinationHospital.status}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                    <span>ICU Available:</span>
+                    <strong style={{ color: destinationHospital.icu_beds_available > 0 ? '#059669' : '#e11d48' }}>
+                      {destinationHospital.icu_beds_available} / {destinationHospital.icu_beds_total}
+                    </strong>
+                  </div>
+                  <button
+                    onClick={() => onSelectHospital && onSelectHospital(destinationHospital)}
+                    style={{
+                      marginTop: '10px', width: '100%',
+                      background: '#0d9488', color: '#fff',
+                      border: 'none', borderRadius: '6px',
+                      padding: '6px', fontSize: '0.75rem', fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Select This Hospital
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          )}
 
         {/* Patient / Origin Marker */}
         {origin && (

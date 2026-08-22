@@ -442,3 +442,4 @@ class SMSQueryResponse(BaseModel):
     reply_to: str
     sms_text: str
     hospitals_found: int
+    should_continue: bool = True  # False when the conversation is complete
