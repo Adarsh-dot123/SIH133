@@ -131,14 +131,20 @@ def get_all_users(db: Session = Depends(get_db)):
     """Fetch all registered users from database for directory and admin audit"""
     return db.query(User).order_by(User.id.desc()).all()
 
+from starlette.concurrency import run_in_threadpool
+
 @router.post("/login", response_model=Token)
-def login(credentials: UserLogin, db: Session = Depends(get_db)):
+async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     # Support searching by email or ABHA ID
     user = db.query(User).filter(
         (User.email == credentials.email) | (User.abha_id == credentials.email)
     ).first()
     
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    if not user:
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+
+    is_valid = await run_in_threadpool(verify_password, credentials.password, user.hashed_password)
+    if not is_valid:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     
     if not user.is_active:

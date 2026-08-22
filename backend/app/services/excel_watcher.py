@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 # Firebase Admin SDK setup
 firebase_initialized = False
 db_firestore = None
+FIRESTORE_DISABLED = False
 
 def init_firebase_admin():
     global firebase_initialized, db_firestore
@@ -175,70 +176,70 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
     finally:
         db_sql.close()
 
-    # 2. Sync to Firestore
-    fs = init_firebase_admin()
-    if fs:
-        for _, row in df.iterrows():
-            raw_id = row.get("id")
-            if pd.isna(raw_id) or str(raw_id).strip().lower() in ("nan", ""):
-                continue
-            try:
-                hosp_id_int = int(float(raw_id))
-                hosp_id = str(hosp_id_int)
-            except Exception:
-                continue
+    # 2. Sync to Firestore (with circuit breaker to prevent server hangs on 429 quota errors)
+    global FIRESTORE_DISABLED
+    if FIRESTORE_DISABLED:
+        return
 
-            doc_ref = fs.collection("hospitals").document(hosp_id)
-            
-            # Construct the blood inventory list matching standard schemas (if columns exist)
-            blood_inv_list = []
-            has_blood_cols = any(col_name in row for col_name in blood_groups_map)
-            
-            if has_blood_cols:
-                for col_name, blood_grp in blood_groups_map.items():
-                    if col_name in row:
-                        val = row.get(col_name)
-                        if pd.notna(val):
-                            blood_inv_list.append({
-                                "blood_group": blood_grp,
-                                "units_available": int(val)
-                            })
+    try:
+        fs = init_firebase_admin()
+        if fs:
+            for _, row in df.iterrows():
+                raw_id = row.get("id")
+                if pd.isna(raw_id) or str(raw_id).strip().lower() in ("nan", ""):
+                    continue
+                try:
+                    hosp_id_int = int(float(raw_id))
+                    hosp_id = str(hosp_id_int)
+                except Exception:
+                    continue
 
-            firestore_payload = {
-                "id": hosp_id,
-                "name": str(row["name"]),
-                "general_beds_available": int(row.get("general_beds_available", 0)),
-                "general_beds_total": int(row.get("general_beds_total", 0)),
-                "icu_beds_available": int(row.get("icu_beds_available", 0)),
-                "icu_beds_total": int(row.get("icu_beds_total", 0)),
-                "ventilators_available": int(row.get("ventilators_available", 0)),
-                "ventilators_total": int(row.get("ventilators_total", 0)),
-                "oxygen_beds_available": int(row.get("oxygen_beds_available", 0)),
-                "oxygen_beds_total": int(row.get("oxygen_beds_total", 0)),
-                "doctors_on_duty": int(row.get("doctors_on_duty", 0))
-            }
-            if has_blood_cols:
-                firestore_payload["blood_inventory"] = blood_inv_list
+                doc_ref = fs.collection("hospitals").document(hosp_id)
+                
+                # Construct the blood inventory list matching standard schemas (if columns exist)
+                blood_inv_list = []
+                has_blood_cols = any(col_name in row for col_name in blood_groups_map)
+                
+                if has_blood_cols:
+                    for col_name, blood_grp in blood_groups_map.items():
+                        if col_name in row:
+                            val = row.get(col_name)
+                            if pd.notna(val):
+                                blood_inv_list.append({
+                                    "blood_group": blood_grp,
+                                    "units_available": int(val)
+                                })
 
-            try:
+                firestore_payload = {
+                    "id": hosp_id,
+                    "name": str(row["name"]),
+                    "general_beds_available": int(row.get("general_beds_available", 0)),
+                    "general_beds_total": int(row.get("general_beds_total", 0)),
+                    "icu_beds_available": int(row.get("icu_beds_available", 0)),
+                    "icu_beds_total": int(row.get("icu_beds_total", 0)),
+                    "ventilators_available": int(row.get("ventilators_available", 0)),
+                    "ventilators_total": int(row.get("ventilators_total", 0)),
+                    "oxygen_beds_available": int(row.get("oxygen_beds_available", 0)),
+                    "oxygen_beds_total": int(row.get("oxygen_beds_total", 0)),
+                    "doctors_on_duty": int(row.get("doctors_on_duty", 0))
+                }
+                if has_blood_cols:
+                    firestore_payload["blood_inventory"] = blood_inv_list
+
                 doc_ref.set(firestore_payload, merge=True)
-            except Exception as fe:
-                logger.error(f"⚠️ Firestore hospital sync skipped due to quota/connection: {fe}")
 
-            med_columns_map = {
-                "med_antivenom": {"name": "Snake Antivenom", "category": "Lifesaving Venom Immunoglobulin", "minThreshold": 30, "med_id": "1", "burnRate": 1.8},
-                "med_rabies": {"name": "Anti-Rabies Vaccine", "category": "Viral Prophylaxis", "minThreshold": 25, "med_id": "2", "burnRate": 2.2},
-                "med_oxytocin": {"name": "Oxytocin Injection", "category": "Maternal Care / Hemorrhage prevention", "minThreshold": 20, "med_id": "3", "burnRate": 3.5},
-                "med_insulin": {"name": "Insulin (Human Mix)", "category": "Chronic Care / Endocrinology", "minThreshold": 25, "med_id": "4", "burnRate": 1.5},
-                "med_iv": {"name": "IV Fluids (Normal Saline)", "category": "Critical Care / Rehydration", "minThreshold": 35, "med_id": "5", "burnRate": 6.0},
-                "med_metformin": {"name": "Metformin 500mg", "category": "Essential Oral Anti-diabetic", "minThreshold": 20, "med_id": "6", "burnRate": 4.2},
-                "med_paracetamol": {"name": "Paracetamol 650mg", "category": "Basic Analgesic & Antipyretic", "minThreshold": 30, "med_id": "7", "burnRate": 12.0}
-            }
+                med_columns_map = {
+                    "med_antivenom": {"name": "Snake Antivenom", "category": "Lifesaving Venom Immunoglobulin", "minThreshold": 30, "med_id": "1", "burnRate": 1.8},
+                    "med_rabies": {"name": "Anti-Rabies Vaccine", "category": "Viral Prophylaxis", "minThreshold": 25, "med_id": "2", "burnRate": 2.2},
+                    "med_oxytocin": {"name": "Oxytocin Injection", "category": "Maternal Care / Hemorrhage prevention", "minThreshold": 20, "med_id": "3", "burnRate": 3.5},
+                    "med_insulin": {"name": "Insulin (Human Mix)", "category": "Chronic Care / Endocrinology", "minThreshold": 25, "med_id": "4", "burnRate": 1.5},
+                    "med_iv": {"name": "IV Fluids (Normal Saline)", "category": "Critical Care / Rehydration", "minThreshold": 35, "med_id": "5", "burnRate": 6.0},
+                    "med_metformin": {"name": "Metformin 500mg", "category": "Essential Oral Anti-diabetic", "minThreshold": 20, "med_id": "6", "burnRate": 4.2},
+                    "med_paracetamol": {"name": "Paracetamol 650mg", "category": "Basic Analgesic & Antipyretic", "minThreshold": 30, "med_id": "7", "burnRate": 12.0}
+                }
 
-            for col_name, info in med_columns_map.items():
-                if col_name in row and pd.notna(row[col_name]):
-                    try:
-                        import datetime
+                for col_name, info in med_columns_map.items():
+                    if col_name in row and pd.notna(row[col_name]):
                         med_stock_val = int(float(row[col_name]))
                         doc_id = f"{hosp_id_int}_{info['med_id']}"
                         med_doc_ref = fs.collection("medicines").document(doc_id)
@@ -255,10 +256,11 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                             "facility": str(row["name"]),
                             "lastUpdated": datetime.datetime.utcnow().isoformat()
                         }, merge=True)
-                    except Exception as me:
-                        logger.error(f"❌ Medicine sync failed for {doc_id}: {me}")
-
-        print("✅ Firestore database synchronized successfully.")
+            print("✅ Firestore database synchronized successfully.")
+    except Exception as fe:
+        if "Quota" in str(fe) or "429" in str(fe) or "Timeout" in str(fe) or "ResourceExhausted" in str(fe):
+            FIRESTORE_DISABLED = True
+            logger.warning("⚠️ Firestore quota limit reached. Paused background Firestore network retries. Local SQLite & direct website sync active.")
 
 def extract_spreadsheet_id(url: str) -> str:
     import re
@@ -406,8 +408,9 @@ async def start_excel_watcher_task():
         
         while True:
             try:
-                # Fetch CSV directly from Google Sheets
-                df = pd.read_csv(csv_url)
+                from starlette.concurrency import run_in_threadpool
+                # Fetch CSV directly from Google Sheets offloaded to threadpool
+                df = await run_in_threadpool(pd.read_csv, csv_url)
                 # Compute md5 hash to check if content changed
                 content_str = df.to_csv(index=False)
                 content_hash = hashlib.md5(content_str.encode('utf-8')).hexdigest()
@@ -415,10 +418,10 @@ async def start_excel_watcher_task():
                 if last_hash is None or content_hash != last_hash:
                     print("📊 Google Sheet modification detected. Synchronizing to SQL & Firestore...")
                     last_hash = content_hash
-                    sync_dataframe_to_databases(df)
+                    await run_in_threadpool(sync_dataframe_to_databases, df)
             except Exception as e:
                 logger.error(f"Error fetching Google Sheet: {e}")
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
     else:
         print("📁 Google Sheet URL not configured. Falling back to local hospitals_data.xlsx watcher...")
         excel_path = "hospitals_data.xlsx"
