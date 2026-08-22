@@ -7,7 +7,7 @@ import {
 import { GovtCommandOverview, DistrictAlert, DistrictOverviewItem } from '../types';
 import { api, createWebSocketSubscriber } from '../api/client';
 import { subscribeCollection, updateFirestoreDoc } from '../firebase';
-import { fetchLiveMedicines, MedicineStock, DEFAULT_MEDICINES } from '../services/medicineService';
+import { fetchLiveMedicines, MedicineStock, DEFAULT_MEDICINES, saveDispatchedOverride } from '../services/medicineService';
 
 export const GovtCommandCenter: React.FC = () => {
   const [overview, setOverview] = useState<GovtCommandOverview | null>(null);
@@ -51,8 +51,10 @@ export const GovtCommandCenter: React.FC = () => {
         if (m.isRestocking && m.restockEta && m.restockEta > 0) {
           const nextEta = m.restockEta - 1;
           if (nextEta <= 0) {
+            saveDispatchedOverride(m.id, { stockLevel: 100, isRestocking: false, restockEta: 0 });
             return { ...m, isRestocking: false, restockEta: 0, stockLevel: 100 };
           }
+          saveDispatchedOverride(m.id, { stockLevel: m.stockLevel, isRestocking: true, restockEta: nextEta, vehicle: m.vehicle });
           return { ...m, restockEta: nextEta };
         }
         return m;
@@ -63,6 +65,12 @@ export const GovtCommandCenter: React.FC = () => {
 
   const handleDispatch = async (med: MedicineStock) => {
     const vehicleId = `TN-${String(med.hospital_id).padStart(2, '0')}-MED-${Math.floor(100 + Math.random() * 899)}`;
+    saveDispatchedOverride(med.id, {
+      stockLevel: med.stockLevel,
+      isRestocking: true,
+      restockEta: 15,
+      vehicle: vehicleId
+    });
     setMedicines(prev => prev.map(m => {
       if (m.id === med.id) {
         return {

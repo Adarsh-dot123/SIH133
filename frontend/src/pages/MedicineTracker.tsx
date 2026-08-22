@@ -6,7 +6,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { subscribeCollection, updateFirestoreDoc } from '../firebase';
 
-import { fetchLiveMedicines, MedicineStock, DEFAULT_MEDICINES } from '../services/medicineService';
+import { fetchLiveMedicines, MedicineStock, DEFAULT_MEDICINES, saveDispatchedOverride } from '../services/medicineService';
 
 export const MedicineTracker: React.FC = () => {
   const { t } = useLanguage();
@@ -41,8 +41,10 @@ export const MedicineTracker: React.FC = () => {
         if (m.isRestocking && m.restockEta && m.restockEta > 0) {
           const nextEta = m.restockEta - 1;
           if (nextEta <= 0) {
+            saveDispatchedOverride(m.id, { stockLevel: 100, isRestocking: false, restockEta: 0 });
             return { ...m, isRestocking: false, restockEta: 0, stockLevel: 100 };
           }
+          saveDispatchedOverride(m.id, { stockLevel: m.stockLevel, isRestocking: true, restockEta: nextEta, vehicle: m.vehicle });
           return { ...m, restockEta: nextEta };
         }
         return m;

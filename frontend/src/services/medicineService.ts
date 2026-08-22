@@ -15,6 +15,7 @@ export interface MedicineStock {
 
 const GOOGLE_SHEET_GVIZ_URL = "https://docs.google.com/spreadsheets/d/1tKNiTPW1_w54FWtRQZ7hg3Yww35LZaEpRBeyH1ZCjrw/gviz/tq?tqx=out:csv&gid=1397067521";
 const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
+const DISPATCHED_STORAGE_KEY = 'medflow_dispatched_overrides';
 
 const MED_CONFIG: Record<string, { id: string; name: string; category: string; minThreshold: number; burnRate: number }> = {
   med_antivenom: { id: "1", name: "Snake Antivenom", category: "Lifesaving Venom Immunoglobulin", minThreshold: 30, burnRate: 1.8 },
@@ -39,6 +40,23 @@ const DEFAULT_HOSPITALS = [
   { id: 10, name: "APJ Hospitals" }
 ];
 
+export function getDispatchedOverrides(): Record<string, { stockLevel: number; isRestocking?: boolean; restockEta?: number; vehicle?: string; timestamp: number }> {
+  try {
+    const raw = localStorage.getItem(DISPATCHED_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveDispatchedOverride(id: string, override: { stockLevel: number; isRestocking?: boolean; restockEta?: number; vehicle?: string }) {
+  try {
+    const map = getDispatchedOverrides();
+    map[id] = { ...override, timestamp: Date.now() };
+    localStorage.setItem(DISPATCHED_STORAGE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
 export const DEFAULT_MEDICINES: MedicineStock[] = DEFAULT_HOSPITALS.flatMap(h => {
   return Object.values(MED_CONFIG).map(c => ({
     id: `${h.id}_${c.id}`,
@@ -56,6 +74,8 @@ export const DEFAULT_MEDICINES: MedicineStock[] = DEFAULT_HOSPITALS.flatMap(h =>
 });
 
 export async function fetchLiveMedicines(): Promise<MedicineStock[]> {
+  let list: MedicineStock[] = [];
+
   // 1. Try Google Sheets gviz CSV (CORS-enabled public stream matching active Sheet tab)
   try {
     const res = await fetch(GOOGLE_SHEET_GVIZ_URL);
@@ -99,27 +119,46 @@ export async function fetchLiveMedicines(): Promise<MedicineStock[]> {
             }
           }
         }
-        if (result.length > 0) return result;
+        if (result.length > 0) list = result;
       }
     }
   } catch (err) {
     console.warn("Direct Google Sheet gviz fetch failed, using fallback:", err);
   }
 
-  // 2. Try Backend API
-  try {
-    const res = await fetch(`${API}/api/hospitals/medicines/all`);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data;
+  // 2. Try Backend API if Google Sheet fetch failed
+  if (list.length === 0) {
+    try {
+      const res = await fetch(`${API}/api/hospitals/medicines/all`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          list = data;
+        }
       }
-    }
-  } catch {
-    // Backend not reachable
+    } catch {}
   }
 
-  return DEFAULT_MEDICINES;
+  if (list.length === 0) {
+    list = DEFAULT_MEDICINES;
+  }
+
+  // 3. Apply persistent dispatched overrides (so restocked stock stays at 100% after van delivery)
+  const overrides = getDispatchedOverrides();
+  return list.map(m => {
+    const ov = overrides[m.id];
+    if (ov) {
+      // If currently restocking, maintain ETA countdown
+      if (ov.isRestocking && ov.restockEta && ov.restockEta > 0) {
+        return { ...m, isRestocking: true, restockEta: ov.restockEta, vehicle: ov.vehicle };
+      }
+      // If restock delivery completed, maintain replenished stock level
+      if (ov.stockLevel !== undefined && ov.stockLevel > 0) {
+        return { ...m, stockLevel: ov.stockLevel, isRestocking: false, restockEta: 0 };
+      }
+    }
+    return m;
+  });
 }
 
 function cleanCell(str: string): string {
