@@ -75,22 +75,28 @@ export const Navbar: React.FC<NavbarProps> = ({
           {currentRole === 'PATIENT' && (
             <>
               <button
+                className={`nav-item ${activeTab === 'medicine-tracker' ? 'active' : ''}`}
+                onClick={() => onTabChange('medicine-tracker')}
+              >
+                <Building2 size={16} /> {t('medicine_supply_dho_monitor', '🏥 Medicine Supply & DHO Monitor')}
+              </button>
+              <button
                 className={`nav-item ${activeTab === 'patient-search' ? 'active' : ''}`}
                 onClick={() => onTabChange('patient-search')}
               >
-                <Building2 size={16} /> {t('hospital_finder', 'Hospital Finder')}
-              </button>
-              <button
-                className={`nav-item ${activeTab === 'patient-referral' ? 'active' : ''}`}
-                onClick={() => onTabChange('patient-referral')}
-              >
-                <Sparkles size={16} /> {t('smart_emergency_referral', 'Smart Emergency Referral')}
+                <Layers size={16} /> {t('hospital_beds_equipment', '🛏️ Hospital Beds & Equipment')}
               </button>
               <button
                 className={`nav-item ${activeTab === 'second-opinion' ? 'active' : ''}`}
                 onClick={() => onTabChange('second-opinion')}
               >
-                <Sparkles size={16} /> {t('second_opinion', 'Second Opinion / Scan Report')}
+                <Sparkles size={16} /> {t('clinical_second_opinion', '📋 Clinical Second Opinion')}
+              </button>
+              <button
+                className={`nav-item ${activeTab === 'rural-gateway' ? 'active' : ''}`}
+                onClick={() => onTabChange('rural-gateway')}
+              >
+                <PhoneCall size={16} /> {t('rural_ivr_sms_gateway', '📞 Rural IVR / SMS Gateway')}
               </button>
             </>
           )}
@@ -148,15 +154,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {/* Rural USSD / SMS Simulator Launcher */}
-          <button
-            onClick={onOpenUssd}
-            className="btn btn-secondary btn-sm"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '6px' }}
-            title="Test Rural Offline USSD (*999#) & SMS Gateway"
-          >
-            <PhoneCall size={14} style={{ color: '#0d9488' }} />
-            <span>{t('rural_ussd_sms', 'Rural USSD/SMS')}</span>
-          </button>
+          {currentRole !== 'PATIENT' && (
+            <button
+              onClick={onOpenUssd}
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '6px' }}
+              title="Test Rural Offline USSD (*999#) & SMS Gateway"
+            >
+              <PhoneCall size={14} style={{ color: '#0d9488' }} />
+              <span>{t('rural_ussd_sms', 'Rural USSD/SMS')}</span>
+            </button>
+          )}
 
         </nav>
 

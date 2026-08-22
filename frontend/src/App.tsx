@@ -15,6 +15,7 @@ import { AuditTrailPage } from './pages/AuditTrailPage';
 import { ABDMAdapterPage } from './pages/ABDMAdapterPage';
 import { UserRegistryPage } from './pages/UserRegistryPage';
 import { SecondOpinion } from './pages/SecondOpinion';
+import { MedicineTracker } from './pages/MedicineTracker';
 import { api, createWebSocketSubscriber } from './api/client';
 import { onPatientAuthStateChanged, logoutUser } from './firebase';
 import { AuthModal } from './components/AuthModal';
@@ -22,13 +23,13 @@ import { HospitalAdminModal } from './components/HospitalAdminModal';
 
 // Strict Role-Based Access Control mapping
 const ROLE_ALLOWED_TABS: Record<UserRole, string[]> = {
-  PATIENT: ['patient-search', 'patient-referral', 'second-opinion', 'login'],
-  HOSPITAL_STAFF: ['hospital-dashboard', 'clinical-turnover', 'abdm-hub', 'login'],
+  PATIENT: ['medicine-tracker', 'patient-search', 'second-opinion', 'rural-gateway', 'login'],
+  HOSPITAL_STAFF: ['hospital-dashboard', 'abdm-hub', 'login'],
   GOVT_ADMIN: ['govt-overview', 'digital-twin', 'iot-monitor', 'audit-trail', 'user-registry', 'login'],
 };
 
 const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
-  PATIENT: 'patient-search',
+  PATIENT: 'medicine-tracker',
   HOSPITAL_STAFF: 'hospital-dashboard',
   GOVT_ADMIN: 'govt-overview',
 };
@@ -36,7 +37,7 @@ const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
 export function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('PATIENT');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('patient-search');
+  const [activeTab, setActiveTab] = useState<string>('medicine-tracker');
   const [isWsConnected, setIsWsConnected] = useState<boolean>(true);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isUssdOpen, setIsUssdOpen] = useState<boolean>(false);
@@ -53,7 +54,7 @@ export function App() {
           setCurrentUser(user);
           const role = user.role as UserRole;
           setCurrentRole(role);
-          setActiveTab(ROLE_DEFAULT_TAB[role] || 'patient-search');
+          setActiveTab(ROLE_DEFAULT_TAB[role] || 'medicine-tracker');
         }
       } catch (e) {
         // Unauthenticated - default to Patient portal
@@ -186,7 +187,7 @@ export function App() {
             onLoginSuccess={handleLoginSuccess}
             onContinueAsGuest={() => {
               setCurrentRole('PATIENT');
-              setActiveTab('patient-search');
+              setActiveTab('medicine-tracker');
             }}
           />
         )}
@@ -203,13 +204,25 @@ export function App() {
         )}
 
         {/* Patient Portal Views (PATIENT ONLY) */}
+        {isTabPermitted && activeTab === 'medicine-tracker' && <MedicineTracker />}
         {isTabPermitted && activeTab === 'patient-search' && <PatientPortal initialTab="search" />}
-        {isTabPermitted && activeTab === 'patient-referral' && <PatientPortal initialTab="referral" />}
         {isTabPermitted && activeTab === 'second-opinion' && <SecondOpinion />}
+        {isTabPermitted && activeTab === 'rural-gateway' && (
+          <div className="card" style={{ maxWidth: '800px', margin: '40px auto', padding: '32px', textAlign: 'center' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: '12px' }}>
+              📞 Rural USSD & SMS Gateway Simulator
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '24px', lineHeight: 1.5 }}>
+              Query real-time public health resource levels, bed counts, and oxygen status using offline-compatible telecommunication channels (such as <strong>*999#</strong> or direct SMS queries).
+            </p>
+            <button onClick={() => setIsUssdOpen(true)} className="btn btn-primary btn-lg" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <span>Launch Live USSD Mobile Simulator</span>
+            </button>
+          </div>
+        )}
 
         {/* Hospital Staff Views (HOSPITAL_STAFF ONLY) */}
         {isTabPermitted && activeTab === 'hospital-dashboard' && <HospitalPortal />}
-        {isTabPermitted && activeTab === 'clinical-turnover' && <HospitalPortal />}
         {isTabPermitted && activeTab === 'abdm-hub' && <ABDMAdapterPage />}
 
         {/* Government Command Center Views (GOVT_ADMIN ONLY) */}
