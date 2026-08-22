@@ -7,6 +7,7 @@ import {
 import { HospitalDetail, Bed, PatientStay, BedTurnoverPrediction } from '../types';
 import { api, createWebSocketSubscriber } from '../api/client';
 import { PredictionBadge } from '../components/PredictionBadge';
+import { subscribeCollection } from '../firebase';
 
 export const HospitalPortal: React.FC = () => {
   const [hospitalsList, setHospitalsList] = useState<any[]>([]);
@@ -93,6 +94,60 @@ export const HospitalPortal: React.FC = () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
   }, [selectedHospitalId, isLiveSync]);
+
+  // Firestore real-time dynamic sync for hospital portal dashboard resources
+  useEffect(() => {
+    const unsubscribe = subscribeCollection('hospitals', (fireHospitals) => {
+      if (fireHospitals && fireHospitals.length > 0) {
+        // 1. Update hospitalsList selector
+        setHospitalsList((prev) => {
+          return prev.map(h => {
+            const match = fireHospitals.find(fh => String(fh.id) === String(h.id) || fh.name === h.name);
+            if (match) {
+              return {
+                ...h,
+                general_beds_available: match.general_beds_available ?? h.general_beds_available,
+                general_beds_total: match.general_beds_total ?? h.general_beds_total,
+                icu_beds_available: match.icu_beds_available ?? h.icu_beds_available,
+                icu_beds_total: match.icu_beds_total ?? h.icu_beds_total,
+                ventilators_available: match.ventilators_available ?? h.ventilators_available,
+                ventilators_total: match.ventilators_total ?? h.ventilators_total,
+                oxygen_beds_available: match.oxygen_beds_available ?? h.oxygen_beds_available,
+                oxygen_beds_total: match.oxygen_beds_total ?? h.oxygen_beds_total,
+                doctors_on_duty: match.doctors_on_duty ?? h.doctors_on_duty
+              };
+            }
+            return h;
+          });
+        });
+
+        // 2. Update current hospitalDetail fields
+        setHospitalDetail((prev) => {
+          if (!prev) return null;
+          const match = fireHospitals.find(fh => String(fh.id) === String(prev.id) || fh.name === prev.name);
+          if (match) {
+            return {
+              ...prev,
+              general_beds_available: match.general_beds_available ?? prev.general_beds_available,
+              general_beds_total: match.general_beds_total ?? prev.general_beds_total,
+              icu_beds_available: match.icu_beds_available ?? prev.icu_beds_available,
+              icu_beds_total: match.icu_beds_total ?? prev.icu_beds_total,
+              ventilators_available: match.ventilators_available ?? prev.ventilators_available,
+              ventilators_total: match.ventilators_total ?? prev.ventilators_total,
+              oxygen_beds_available: match.oxygen_beds_available ?? prev.oxygen_beds_available,
+              oxygen_beds_total: match.oxygen_beds_total ?? prev.oxygen_beds_total,
+              doctors_on_duty: match.doctors_on_duty ?? prev.doctors_on_duty
+            };
+          }
+          return prev;
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [selectedHospitalId]);
 
   const loadHospitalList = async () => {
     try {

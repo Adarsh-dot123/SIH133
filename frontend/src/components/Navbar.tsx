@@ -158,26 +158,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>{t('rural_ussd_sms', 'Rural USSD/SMS')}</span>
           </button>
 
-          {/* Hospital Admin Live Editor Toggle */}
-          {onOpenAdmin && (
-            <button
-              onClick={onOpenAdmin}
-              className="btn btn-secondary btn-sm"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                marginLeft: '6px',
-                borderColor: '#e2e8f0',
-                color: '#4f46e5',
-                fontWeight: 700
-              }}
-              title="Open Hospital Admin Live Editor (Firestore Sync)"
-            >
-              <ShieldCheck size={14} style={{ color: '#4f46e5' }} />
-              <span>Admin Editor</span>
-            </button>
-          )}
         </nav>
 
         {/* Stakeholder Role Badge & Account Actions */}
