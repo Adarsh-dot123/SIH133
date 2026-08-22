@@ -1,10 +1,65 @@
-import React, { useState, useEffect } from 'react';
+// Predefined Tamil Nadu & Karnataka location lookup with GPS coordinates
+const KNOWN_LOCATIONS = [
+  // Chennai Areas
+  { label: 'T. Nagar, Chennai', lat: 13.0450, lng: 80.2400 },
+  { label: 'Anna Nagar, Chennai', lat: 13.0850, lng: 80.2101 },
+  { label: 'Adyar, Chennai', lat: 13.0012, lng: 80.2565 },
+  { label: 'Velachery, Chennai', lat: 12.9754, lng: 80.2191 },
+  { label: 'Tambaram, Chennai', lat: 12.9249, lng: 80.1000 },
+  { label: 'Porur, Chennai', lat: 13.0358, lng: 80.1573 },
+  { label: 'Chromepet, Chennai', lat: 12.9516, lng: 80.1462 },
+  { label: 'Perambur, Chennai', lat: 13.1169, lng: 80.2341 },
+  { label: 'Guindy, Chennai', lat: 13.0067, lng: 80.2206 },
+  { label: 'Greams Road, Chennai', lat: 13.0567, lng: 80.2569 },
+  { label: 'Royapettah, Chennai', lat: 13.0518, lng: 80.2647 },
+  { label: 'Egmore, Chennai', lat: 13.0732, lng: 80.2609 },
+  { label: 'Nungambakkam, Chennai', lat: 13.0580, lng: 80.2427 },
+  { label: 'Mylapore, Chennai', lat: 13.0338, lng: 80.2685 },
+  { label: 'Sholinganallur, Chennai', lat: 12.9010, lng: 80.2279 },
+  { label: 'OMR (Old Mahabalipuram Road), Chennai', lat: 12.9279, lng: 80.2337 },
+  { label: 'Perungudi, Chennai', lat: 12.9694, lng: 80.2451 },
+  { label: 'Madipakkam, Chennai', lat: 12.9602, lng: 80.2054 },
+  // Coimbatore Areas
+  { label: 'RS Puram, Coimbatore', lat: 11.0035, lng: 76.9568 },
+  { label: 'Gandhipuram, Coimbatore', lat: 11.0168, lng: 76.9774 },
+  { label: 'Saibaba Colony, Coimbatore', lat: 11.0239, lng: 76.9489 },
+  { label: 'Peelamedu, Coimbatore', lat: 11.0232, lng: 77.0310 },
+  { label: 'Singanallur, Coimbatore', lat: 10.9841, lng: 77.0301 },
+  // Madurai Areas
+  { label: 'Anna Nagar, Madurai', lat: 9.9252, lng: 78.1198 },
+  { label: 'KK Nagar, Madurai', lat: 9.9020, lng: 78.0910 },
+  { label: 'Bypass Road, Madurai', lat: 9.9619, lng: 78.1375 },
+  // Vellore Areas
+  { label: 'Katpadi, Vellore', lat: 12.9674, lng: 79.1454 },
+  { label: 'Sathuvachari, Vellore', lat: 12.9286, lng: 79.1477 },
+  // Trichy Areas
+  { label: 'Cantonment, Trichy', lat: 10.8050, lng: 78.6857 },
+  { label: 'Thillai Nagar, Trichy', lat: 10.7960, lng: 78.6897 },
+  // Salem Areas
+  { label: 'Four Roads, Salem', lat: 11.6666, lng: 78.1541 },
+  { label: 'Suramangalam, Salem', lat: 11.6816, lng: 78.0968 },
+  // Kanchipuram
+  { label: 'Kanchipuram Town', lat: 12.8342, lng: 79.7036 },
+  // Bangalore
+  { label: 'Jayanagar, Bangalore', lat: 12.9259, lng: 77.5933 },
+  { label: 'Indiranagar, Bangalore', lat: 12.9719, lng: 77.6412 },
+  { label: 'Koramangala, Bangalore', lat: 12.9352, lng: 77.6245 },
+  { label: 'Rajajinagar, Bangalore', lat: 13.0050, lng: 77.5545 },
+  { label: 'Whitefield, Bangalore', lat: 12.9698, lng: 77.7499 },
+  // Mysuru
+  { label: 'Mysuru City Centre', lat: 12.2958, lng: 76.6394 },
+  { label: 'Kuvempunagar, Mysuru', lat: 12.2896, lng: 76.6381 },
+];
+
+
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Filter, MapPin, Sparkles, Phone, Navigation,
-  Shield, AlertTriangle, CheckCircle, ChevronRight, Activity, Ambulance
+  Shield, AlertTriangle, CheckCircle, ChevronRight, Activity, Ambulance,
+  RefreshCw, Wifi, WifiOff, Clock
 } from 'lucide-react';
 import { HospitalSummary, HospitalReferralScore } from '../types';
-import { api } from '../api/client';
+import { api, createWebSocketSubscriber } from '../api/client';
 import { PredictionBadge } from '../components/PredictionBadge';
 import { MapView } from '../components/MapView';
 import { useLanguage } from '../context/LanguageContext';
@@ -18,12 +73,20 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
   const { t, language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'search' | 'referral'>(initialTab === 'referral' ? 'referral' : 'search');
   const [hospitals, setHospitals] = useState<HospitalSummary[]>([]);
+  const [allHospitals, setAllHospitals] = useState<HospitalSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
   const [pmjayOnly, setPmjayOnly] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedHospital, setSelectedHospital] = useState<HospitalSummary | null>(null);
   const [ambulances, setAmbulances] = useState<any[]>([]);
+  const [selectedSearchHospital, setSelectedSearchHospital] = useState<HospitalSummary | null>(null);
+  const [selectedReferralHospital, setSelectedReferralHospital] = useState<HospitalSummary | null>(null);
+  const [isLiveSync, setIsLiveSync] = useState<boolean>(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [justRefreshed, setJustRefreshed] = useState<boolean>(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Referral Request State
   const [patientName, setPatientName] = useState<string>('Ramesh Sundaram');
@@ -115,24 +178,99 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
     loadHospitals();
   }, [selectedSpecialty, pmjayOnly]);
 
-  const loadHospitals = async () => {
-    setIsLoading(true);
+  // Location picker state
+  const [locationMode, setLocationMode] = useState<'preset' | 'gps' | 'manual'>('preset');
+  const [isGpsLoading, setIsGpsLoading] = useState<boolean>(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+
+  const handleUseGPS = () => {
+    setGpsError(null);
+    if (!navigator.geolocation) {
+      setGpsError('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = parseFloat(position.coords.latitude.toFixed(4));
+        const lng = parseFloat(position.coords.longitude.toFixed(4));
+        setOriginLat(lat);
+        setOriginLng(lng);
+        setOriginLabel(`My Location (${lat}, ${lng})`);
+        setLocationMode('gps');
+        setIsGpsLoading(false);
+      },
+      (err) => {
+        setGpsError('Unable to get your location. Please select from the list or enter manually. (' + err.message + ')');
+        setIsGpsLoading(false);
+      },
+      { timeout: 8000, enableHighAccuracy: true }
+    );
+  };
+
+  const loadAllHospitals = async () => {
     try {
-      const data = await api.getHospitals({
-        specialty: selectedSpecialty || undefined,
-        pmjay_only: pmjayOnly,
-        search: searchQuery || undefined
-      });
-      setHospitals(data);
-      if (data.length > 0 && !selectedHospital) {
-        setSelectedHospital(data[0]);
+      const data = await api.getHospitals();
+      setAllHospitals(data);
+    } catch (err) {
+      console.error('Failed to load all hospitals', err);
+    }
+  };
+
+  const loadHospitals = async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+      setIsRefreshing(true);
+    }
+    try {
+      const [filteredData] = await Promise.all([
+        api.getHospitals({
+          specialty: selectedSpecialty || undefined,
+          pmjay_only: pmjayOnly,
+          search: searchQuery || undefined
+        }),
+        loadAllHospitals()
+      ]);
+      setHospitals(filteredData);
+      setLastUpdated(new Date());
+      if (!silent) {
+        setJustRefreshed(true);
+        setTimeout(() => setJustRefreshed(false), 2000);
+      }
+      if (filteredData.length > 0 && !selectedSearchHospital) {
+        setSelectedSearchHospital(filteredData[0]);
       }
     } catch (err) {
       console.error('Failed to load hospitals', err);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    loadHospitals();
+  }, [selectedSpecialty, pmjayOnly]);
+
+  // Real-time WebSocket sync & periodic polling across ALL portals
+  useEffect(() => {
+    // 1. WebSocket real-time subscription
+    const unsubscribe = createWebSocketSubscriber(() => {
+      loadHospitals(true);
+    });
+
+    // 2. 5-second dynamic polling
+    if (isLiveSync) {
+      pollingRef.current = setInterval(() => {
+        loadHospitals(true);
+      }, 5000);
+    }
+
+    return () => {
+      unsubscribe();
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [isLiveSync, selectedSpecialty, pmjayOnly, searchQuery]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,8 +290,21 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
       });
       setRankedResults(res);
       if (res.length > 0) {
-        const topHosp = hospitals.find(h => h.id === res[0].hospital_id);
-        if (topHosp) setSelectedHospital(topHosp);
+        let topHosp = allHospitals.find(h => h.id === res[0].hospital_id);
+        if (!topHosp) {
+          topHosp = hospitals.find(h => h.id === res[0].hospital_id);
+        }
+        if (topHosp) {
+          setSelectedReferralHospital(topHosp);
+        } else {
+          // If not found in memory, retrieve it via details call to populate selection
+          try {
+            const details = await api.getHospitalDetail(res[0].hospital_id);
+            setSelectedReferralHospital(details);
+          } catch (e) {
+            console.error('Failed to resolve recommended hospital details', e);
+          }
+        }
       }
     } catch (err: any) {
       alert('Error calculating smart referral: ' + err.message);
@@ -214,7 +365,52 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {lastUpdated && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.8)' }}>
+              <Clock size={13} />
+              <span>Updated {lastUpdated.toLocaleTimeString()}</span>
+            </div>
+          )}
+          <button
+            onClick={() => setIsLiveSync(s => !s)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.2)',
+              background: isLiveSync ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+              color: '#ffffff',
+              fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
+              backdropFilter: 'blur(6px)'
+            }}
+          >
+            {isLiveSync ? <Wifi size={13} /> : <WifiOff size={13} />}
+            {isLiveSync ? 'Live Sync Active (5s)' : 'Live Sync Paused'}
+          </button>
+          <button
+            onClick={() => loadHospitals(false)}
+            className="btn btn-secondary"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: justRefreshed ? '#ecfdf5' : 'rgba(255, 255, 255, 0.95)',
+              borderColor: justRefreshed ? '#10b981' : '#ffffff',
+              color: justRefreshed ? '#059669' : '#0f172a',
+              padding: '10px 14px',
+              transition: 'all 0.2s ease'
+            }}
+            title="Fetch latest hospital bed availability"
+          >
+            {justRefreshed ? (
+              <>
+                <CheckCircle size={14} style={{ color: '#10b981' }} />
+                <span>Hospitals Updated!</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw size={14} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+                <span>{isRefreshing ? 'Fetching...' : 'Refresh'}</span>
+              </>
+            )}
+          </button>
           <button
             onClick={() => setActiveSubTab('search')}
             className={`btn ${activeSubTab === 'search' ? 'btn-primary' : 'btn-secondary'}`}
@@ -307,12 +503,12 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                 </div>
               ) : (
                 hospitals.map((hosp) => {
-                  const isSelected = selectedHospital?.id === hosp.id;
+                  const isSelected = selectedSearchHospital?.id === hosp.id;
                   return (
                     <div
                       key={hosp.id}
                       className="card"
-                      onClick={() => setSelectedHospital(hosp)}
+                      onClick={() => setSelectedSearchHospital(hosp)}
                       style={{
                         cursor: 'pointer',
                         borderColor: isSelected ? '#0d9488' : undefined,
@@ -407,29 +603,29 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                 <MapView
                   hospitals={hospitals}
                   ambulances={ambulances}
-                  center={selectedHospital ? [selectedHospital.latitude, selectedHospital.longitude] : [13.0500, 80.2500]}
+                  center={selectedSearchHospital ? [selectedSearchHospital.latitude, selectedSearchHospital.longitude] : [13.0500, 80.2500]}
                   zoom={12}
-                  onSelectHospital={(h) => setSelectedHospital(h)}
+                  onSelectHospital={(h) => setSelectedSearchHospital(h)}
                 />
               </div>
 
-              {selectedHospital && (
+              {selectedSearchHospital && (
                 <div className="card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
-                      {selectedHospital.name}
+                      {selectedSearchHospital.name}
                     </h3>
                     <span style={{
                       fontSize: '0.75rem', fontWeight: 700, padding: '3px 8px', borderRadius: '9999px',
-                      background: selectedHospital.status === 'NORMAL' ? '#ecfdf5' : '#fff1f2',
-                      color: selectedHospital.status === 'NORMAL' ? '#059669' : '#e11d48'
+                      background: selectedSearchHospital.status === 'NORMAL' ? '#ecfdf5' : '#fff1f2',
+                      color: selectedSearchHospital.status === 'NORMAL' ? '#059669' : '#e11d48'
                     }}>
-                      Status: {selectedHospital.status}
+                      Status: {selectedSearchHospital.status}
                     </span>
                   </div>
 
                   <div style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '12px' }}>
-                    <strong>Specialties Offered:</strong> {selectedHospital.specialties.join(' • ')}
+                    <strong>Specialties Offered:</strong> {selectedSearchHospital.specialties.join(' • ')}
                   </div>
 
                   <div style={{
@@ -441,7 +637,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                       AI Bed Turnover Forecast (12h - 24h)
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#3730a3', marginTop: '4px' }}>
-                      Our clinical Length-of-Stay engine projects <strong>+{selectedHospital.predicted_available_12h} total beds</strong> (+{selectedHospital.predicted_icu_available_12h} ICU) will be freed in 12 hours based on active inpatient vitals recovery trends.
+                      Our clinical Length-of-Stay engine projects <strong>+{selectedSearchHospital.predicted_available_12h} total beds</strong> (+{selectedSearchHospital.predicted_icu_available_12h} ICU) will be freed in 12 hours based on active inpatient vitals recovery trends.
                     </div>
                   </div>
 
@@ -530,27 +726,112 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             </div>
 
             <div className="form-group">
-              <label className="form-label">{t('origin_location', 'Patient Origin Location (GPS)')}</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  value={originLabel}
-                  onChange={(e) => setOriginLabel(e.target.value)}
-                  className="form-input"
-                  style={{ flex: 1 }}
-                />
+              <label className="form-label">
+                <MapPin size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                {t('origin_location', 'Patient Origin Location')}
+              </label>
+
+              {/* Quick-pick predefined locations */}
+              <select
+                value={originLabel}
+                onChange={(e) => {
+                  const selected = KNOWN_LOCATIONS.find(l => l.label === e.target.value);
+                  if (selected) {
+                    setOriginLat(selected.lat);
+                    setOriginLng(selected.lng);
+                    setOriginLabel(selected.label);
+                    setLocationMode('preset');
+                  }
+                }}
+                className="form-select"
+                style={{ marginBottom: '8px' }}
+              >
+                <option value="">— Select a known area / locality —</option>
+                {KNOWN_LOCATIONS.map(l => (
+                  <option key={l.label} value={l.label}>{l.label}</option>
+                ))}
+              </select>
+
+              {/* GPS / Manual toggle */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setOriginLat(13.0450);
-                    setOriginLng(80.2400);
-                    setOriginLabel('T. Nagar, Chennai');
-                  }}
+                  onClick={handleUseGPS}
+                  disabled={isGpsLoading}
                   className="btn btn-secondary btn-sm"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 >
-                  Reset GPS
+                  <Navigation size={14} />
+                  {isGpsLoading ? 'Detecting...' : 'Use My GPS Location'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocationMode(m => m === 'manual' ? 'preset' : 'manual')}
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
+                >
+                  <Filter size={13} />
+                  {locationMode === 'manual' ? 'Hide Manual' : 'Enter Manually'}
                 </button>
               </div>
+
+              {/* Manual lat/lng fields */}
+              {locationMode === 'manual' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>Latitude</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={originLat}
+                      onChange={(e) => {
+                        setOriginLat(parseFloat(e.target.value) || 0);
+                        setOriginLabel(`Custom (${e.target.value}, ${originLng})`);
+                        setLocationMode('manual');
+                      }}
+                      className="form-input"
+                      style={{ fontSize: '0.82rem' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>Longitude</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={originLng}
+                      onChange={(e) => {
+                        setOriginLng(parseFloat(e.target.value) || 0);
+                        setOriginLabel(`Custom (${originLat}, ${e.target.value})`);
+                        setLocationMode('manual');
+                      }}
+                      className="form-input"
+                      style={{ fontSize: '0.82rem' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* GPS error message */}
+              {gpsError && (
+                <div style={{ fontSize: '0.76rem', color: '#dc2626', background: '#fef2f2', padding: '6px 10px', borderRadius: '6px', marginBottom: '6px' }}>
+                  {gpsError}
+                </div>
+              )}
+
+              {/* Active location badge */}
+              {originLabel && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px',
+                  padding: '8px 12px', fontSize: '0.8rem', color: '#166534'
+                }}>
+                  <MapPin size={13} />
+                  <span><strong>From:</strong> {originLabel}</span>
+                  <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: '0.72rem', fontFamily: 'monospace' }}>
+                    {originLat.toFixed(4)}, {originLng.toFixed(4)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <button
@@ -589,10 +870,11 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                 Emergency Ambulance Route & Target Hospital
               </h3>
               <MapView
-                hospitals={hospitals}
+                hospitals={allHospitals.length > 0 ? allHospitals : hospitals}
                 origin={{ lat: originLat, lng: originLng, label: originLabel }}
-                destinationHospital={selectedHospital}
+                destinationHospital={selectedReferralHospital}
                 zoom={12}
+                onSelectHospital={(h) => setSelectedReferralHospital(h)}
               />
             </div>
 
@@ -605,10 +887,16 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
                 <div
                   key={score.hospital_id}
                   className="card"
+                  onClick={() => {
+                    const hosp = allHospitals.find(h => h.id === score.hospital_id) || hospitals.find(h => h.id === score.hospital_id);
+                    if (hosp) setSelectedReferralHospital(hosp);
+                  }}
                   style={{
                     padding: '16px',
-                    borderColor: score.recommendation_rank === 1 ? '#4f46e5' : '#e2e8f0',
-                    background: score.recommendation_rank === 1 ? '#f5f3ff' : '#ffffff'
+                    cursor: 'pointer',
+                    borderColor: selectedReferralHospital?.id === score.hospital_id ? '#4f46e5' : '#e2e8f0',
+                    background: selectedReferralHospital?.id === score.hospital_id ? '#f5f3ff' : '#ffffff',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

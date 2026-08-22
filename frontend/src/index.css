@@ -469,15 +469,83 @@ button, input, select, textarea {
   position: relative;
 }
 
-/* Leaflet Map */
+/* ── Leaflet Map ─────────────────────────────────────────────────────── */
 .map-container {
-  height: 380px;
+  height: 420px;
   width: 100%;
   border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid var(--slate-200);
   margin-top: 14px;
+  position: relative;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  transition: box-shadow 0.2s ease;
 }
+
+.map-container:focus-within {
+  box-shadow: 0 0 0 3px #0d948840;
+}
+
+/* Make Leaflet popup text legible */
+.leaflet-popup-content-wrapper {
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.82rem !important;
+  line-height: 1.5 !important;
+}
+
+/* Larger Leaflet zoom buttons for touch */
+.leaflet-control-zoom a {
+  width: 34px !important;
+  height: 34px !important;
+  line-height: 34px !important;
+  font-size: 18px !important;
+  border-radius: 6px !important;
+  background: rgba(255,255,255,0.97) !important;
+  border: 1px solid #e2e8f0 !important;
+  font-weight: 900 !important;
+}
+
+.leaflet-control-zoom a:focus {
+  outline: 2px solid #0d9488 !important;
+  outline-offset: 2px !important;
+}
+
+/* Leaflet attribution smaller */
+.leaflet-control-attribution {
+  font-size: 0.6rem !important;
+  background: rgba(255,255,255,0.7) !important;
+  padding: 1px 5px !important;
+}
+
+/* Pulse-ring keyframe for patient & destination markers */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.45); }
+  70%  { box-shadow: 0 0 0 12px rgba(79, 70, 229, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+}
+
+/* Leaflet tooltip accessible styling */
+.leaflet-tooltip {
+  border-radius: 6px !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  padding: 4px 8px !important;
+  background: rgba(15, 23, 42, 0.88) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+}
+
+.leaflet-tooltip-top::before { border-top-color: rgba(15, 23, 42, 0.88) !important; }
+
+
 
 /* USSD Phone Terminal Simulator */
 .ussd-phone {
