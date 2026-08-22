@@ -191,47 +191,50 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
 
             doc_ref.set(firestore_payload, merge=True)
 
-            # 3. Dynamic Medicine Sync: check if med_stock exists on this row
-            if "med_stock" in row and pd.notna(row["med_stock"]):
-                try:
-                    import datetime
-                    med_stock_val = int(float(row["med_stock"]))
-                    med_doc_ref = fs.collection("medicines").document(str(hosp_id_int))
-                    
-                    # Fetch existing doc to avoid overwriting category/burnRate
-                    med_doc = med_doc_ref.get()
-                    if med_doc.exists:
-                        med_doc_ref.update({
-                            "stockLevel": med_stock_val,
-                            "facility": str(row["name"]),
-                            "lastUpdated": datetime.datetime.utcnow().isoformat()
-                        })
-                    else:
-                        med_mapping = {
-                            1: {"name": "Snake Antivenom", "category": "Lifesaving Venom Immunoglobulin", "minThreshold": 30},
-                            2: {"name": "Anti-Rabies Vaccine", "category": "Viral Prophylaxis", "minThreshold": 25},
-                            3: {"name": "Oxytocin Injection", "category": "Maternal Care / Hemorrhage prevention", "minThreshold": 20},
-                            4: {"name": "Insulin (Human Mix)", "category": "Chronic Care / Endocrinology", "minThreshold": 25},
-                            5: {"name": "IV Fluids (Normal Saline)", "category": "Critical Care / Rehydration", "minThreshold": 35},
-                            6: {"name": "Metformin 500mg", "category": "Essential Oral Anti-diabetic", "minThreshold": 20},
-                            7: {"name": "Paracetamol 650mg", "category": "Basic Analgesic & Antipyretic", "minThreshold": 30}
-                        }
-                        med_info = med_mapping.get(hosp_id_int, {"name": f"Essential Drug {hosp_id_int}", "category": "General Medication", "minThreshold": 25})
-                        med_doc_ref.set({
-                            "id": str(hosp_id_int),
-                            "name": med_info["name"],
-                            "category": med_info["category"],
-                            "stockLevel": med_stock_val,
-                            "minThreshold": med_info["minThreshold"],
-                            "facility": str(row["name"]),
-                            "burnRate": 1.5,
-                            "isRestocking": False,
-                            "restockEta": 0,
-                            "vehicle": "",
-                            "lastUpdated": datetime.datetime.utcnow().isoformat()
-                        })
-                except Exception as ex:
-                    logger.error(f"❌ Medicine Firestore sync failed for hospital {hosp_id_int}: {ex}")
+            # 3. Dynamic Medicine Sync: check if med columns exist on this row
+            med_columns_map = {
+                "med_antivenom": {"name": "Snake Antivenom", "category": "Lifesaving Venom Immunoglobulin", "minThreshold": 30, "med_id": "1", "burnRate": 1.8},
+                "med_rabies": {"name": "Anti-Rabies Vaccine", "category": "Viral Prophylaxis", "minThreshold": 25, "med_id": "2", "burnRate": 2.2},
+                "med_oxytocin": {"name": "Oxytocin Injection", "category": "Maternal Care / Hemorrhage prevention", "minThreshold": 20, "med_id": "3", "burnRate": 3.5},
+                "med_insulin": {"name": "Insulin (Human Mix)", "category": "Chronic Care / Endocrinology", "minThreshold": 25, "med_id": "4", "burnRate": 1.5},
+                "med_iv": {"name": "IV Fluids (Normal Saline)", "category": "Critical Care / Rehydration", "minThreshold": 35, "med_id": "5", "burnRate": 6.0},
+                "med_metformin": {"name": "Metformin 500mg", "category": "Essential Oral Anti-diabetic", "minThreshold": 20, "med_id": "6", "burnRate": 4.2},
+                "med_paracetamol": {"name": "Paracetamol 650mg", "category": "Basic Analgesic & Antipyretic", "minThreshold": 30, "med_id": "7", "burnRate": 12.0}
+            }
+
+            for col_name, info in med_columns_map.items():
+                if col_name in row and pd.notna(row[col_name]):
+                    try:
+                        import datetime
+                        med_stock_val = int(float(row[col_name]))
+                        doc_id = f"{hosp_id_int}_{info['med_id']}"
+                        med_doc_ref = fs.collection("medicines").document(doc_id)
+                        
+                        med_doc = med_doc_ref.get()
+                        if med_doc.exists:
+                            med_doc_ref.update({
+                                "stockLevel": med_stock_val,
+                                "facility": str(row["name"]),
+                                "lastUpdated": datetime.datetime.utcnow().isoformat()
+                            })
+                        else:
+                            med_doc_ref.set({
+                                "id": doc_id,
+                                "med_id": info["med_id"],
+                                "hospital_id": hosp_id_int,
+                                "name": info["name"],
+                                "category": info["category"],
+                                "stockLevel": med_stock_val,
+                                "minThreshold": info["minThreshold"],
+                                "facility": str(row["name"]),
+                                "burnRate": info["burnRate"],
+                                "isRestocking": False,
+                                "restockEta": 0,
+                                "vehicle": "",
+                                "lastUpdated": datetime.datetime.utcnow().isoformat()
+                            })
+                    except Exception as ex:
+                        logger.error(f"❌ Medicine Firestore sync failed for hospital {hosp_id_int} column {col_name}: {ex}")
 
         print("✅ Firestore database synchronized successfully.")
 
