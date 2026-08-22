@@ -158,6 +158,7 @@ export function App() {
   };
 
   const handleLoginSuccess = (user: User, role: UserRole) => {
+    localStorage.setItem('medflow_user', JSON.stringify(user));
     setCurrentUser(user);
     setCurrentRole(role);
     setActiveTab(ROLE_DEFAULT_TAB[role]);
