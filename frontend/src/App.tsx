@@ -40,7 +40,7 @@ const ROLE_DEFAULT_TAB: Record<UserRole, string> = {
 export function App() {
   const [currentRole, setCurrentRole] = useState<UserRole>('PATIENT');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('medicine-tracker');
+  const [activeTab, setActiveTab] = useState<string>('login');
   const [isWsConnected, setIsWsConnected] = useState<boolean>(true);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isUssdOpen, setIsUssdOpen] = useState<boolean>(false);
@@ -67,16 +67,23 @@ export function App() {
   // Check existing auth token and Firebase Auth on boot
   useEffect(() => {
     const checkAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setActiveTab('login');
+        return;
+      }
       try {
         const user = await api.getMe();
         if (user && user.email) {
           setCurrentUser(user);
           const role = user.role as UserRole;
           setCurrentRole(role);
-          setActiveTab(ROLE_DEFAULT_TAB[role] || 'medicine-tracker');
+          setActiveTab(ROLE_DEFAULT_TAB[role] || 'login');
+        } else {
+          setActiveTab('login');
         }
       } catch (e) {
-        // Unauthenticated - default to Patient portal
+        setActiveTab('login');
       }
     };
     checkAuth();
