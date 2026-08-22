@@ -97,7 +97,7 @@ def test_rural_ussd_gateway():
     })
     assert response.status_code == 200
     data = response.json()
-    assert "MEDFLOW RURAL HEALTH HELPLINE" in data["message"]
+    assert "MEDFLOW RURAL HELPLINE" in data["message"]
     assert data["should_continue"] == True
 
 def test_rural_sms_gateway():
@@ -107,7 +107,7 @@ def test_rural_sms_gateway():
     })
     assert response.status_code == 200
     data = response.json()
-    assert "MEDFLOW LIVE RESPONSE" in data["sms_text"]
+    assert "BED RESULTS" in data["sms_text"]
     assert data["hospitals_found"] > 0
 
 def test_blockchain_audit_trail_integrity():

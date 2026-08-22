@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Landmark, AlertTriangle, ShieldCheck, ArrowRight, RefreshCw,
   TrendingDown, CheckCircle, Activity, MapPin, Building, Share2,
-  Wifi, WifiOff, Clock
+  Wifi, WifiOff, Clock, Package, Truck
 } from 'lucide-react';
 import { GovtCommandOverview, DistrictAlert, DistrictOverviewItem } from '../types';
 import { api, createWebSocketSubscriber } from '../api/client';
+import { subscribeCollection, updateFirestoreDoc } from '../firebase';
 
 export const GovtCommandCenter: React.FC = () => {
   const [overview, setOverview] = useState<GovtCommandOverview | null>(null);
@@ -15,6 +16,42 @@ export const GovtCommandCenter: React.FC = () => {
   const [isLiveSync, setIsLiveSync] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Medicine supply states
+  const [medicines, setMedicines] = useState<any[]>([]);
+
+  // Subscribe to medicines Firestore updates
+  useEffect(() => {
+    const unsubscribe = subscribeCollection('medicines', (fireMeds) => {
+      if (fireMeds && fireMeds.length > 0) {
+        const sorted = [...fireMeds].sort((a, b) => Number(a.id) - Number(b.id));
+        setMedicines(sorted);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Handle local resupply eta tick
+  useEffect(() => {
+    const timer = setInterval(() => {
+      medicines.forEach((med) => {
+        if (med.isRestocking && med.restockEta && med.restockEta > 0) {
+          const nextEta = med.restockEta - 1;
+          if (nextEta === 0) {
+            updateFirestoreDoc('medicines', med.id, {
+              stockLevel: 95,
+              isRestocking: false,
+              restockEta: 0,
+              vehicle: ''
+            });
+          } else {
+            updateFirestoreDoc('medicines', med.id, { restockEta: nextEta });
+          }
+        }
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [medicines]);
 
   // Reallocation modal state
   const [isReallocating, setIsReallocating] = useState<boolean>(false);
@@ -208,6 +245,93 @@ export const GovtCommandCenter: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Real-time Medicine Supply & Logistics Resupply (Problem Statement 26133) */}
+      <div className="card" style={{ marginBottom: '24px', padding: '24px' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Package size={20} style={{ color: '#0d9488' }} />
+          Essential Medicines & DHO Resupply Logistics Center
+        </h2>
+        <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '20px' }}>
+          Monitor real-time drug levels across rural health centres and dispatch emergency warehouse couriers to restore critical stocks.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          {medicines.map((med) => {
+            const isLow = med.stockLevel <= med.minThreshold;
+            return (
+              <div key={med.id} style={{
+                padding: '16px',
+                borderRadius: '12px',
+                background: isLow ? '#fff1f2' : '#f8fafc',
+                border: `1px solid ${isLow ? '#fecdd3' : '#e2e8f0'}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                justifyContent: 'space-between'
+              }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                      {med.name}
+                    </h4>
+                    <span style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      color: isLow ? '#dc2626' : '#0d9488',
+                      background: isLow ? '#fee2e2' : '#ccfbf1',
+                      padding: '2px 8px',
+                      borderRadius: '9999px'
+                    }}>
+                      {med.stockLevel}%
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                    {med.category}
+                  </span>
+                  <div style={{ fontSize: '0.74rem', color: '#475569', marginTop: '6px' }}>
+                    Facility: <strong>{med.facility}</strong>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '9999px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${med.stockLevel}%`,
+                    height: '100%',
+                    background: isLow ? '#ef4444' : '#0d9488',
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+
+                {/* Admin restock actions */}
+                <div style={{ display: 'flex', alignItems: 'center', marginTop: '4px' }}>
+                  {med.isRestocking ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: '#b91c1c', fontWeight: 700 }}>
+                      <Truck size={14} className="spin" />
+                      <span>Van {med.vehicle} en route ({med.restockEta}s left)</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        await updateFirestoreDoc('medicines', med.id, {
+                          isRestocking: true,
+                          restockEta: 45,
+                          vehicle: `TN-19-EM-4${Math.floor(100 + Math.random() * 900)}`
+                        });
+                      }}
+                      className={`btn btn-xs ${isLow ? 'btn-primary animate-pulse' : 'btn-secondary'}`}
+                      style={{ width: '100%', fontSize: '0.72rem', padding: '4px' }}
+                    >
+                      Dispatch Emergency Resupply
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Main Grid: Left = District Heatmap Grid, Right = Alerts & Reallocation */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>

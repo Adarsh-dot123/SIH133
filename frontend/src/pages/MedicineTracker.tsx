@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, AlertCircle, Clock, MapPin, 
   CheckCircle, Truck, Package, Layers, Info 
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { subscribeCollection, updateFirestoreDoc } from '../firebase';
 
 interface MedicineStock {
   id: string;
@@ -13,89 +14,74 @@ interface MedicineStock {
   burnRate: number;
   minThreshold: number;
   facility: string;
+  isRestocking?: boolean;
+  restockEta?: number;
+  vehicle?: string;
 }
 
 export const MedicineTracker: React.FC = () => {
   const { t } = useLanguage();
-  
-  // Real-time public health medicine supply chain data
-  const [medicines, setMedicines] = useState<MedicineStock[]>([
-    { id: '1', name: 'Snake Antivenom', category: 'Lifesaving Venom Immunoglobulin', stockLevel: 45, burnRate: 1.8, minThreshold: 30, facility: 'Kanchipuram PHC' },
-    { id: '2', name: 'Anti-Rabies Vaccine', category: 'Viral Prophylaxis', stockLevel: 18, burnRate: 2.2, minThreshold: 25, facility: 'Walajabad Sub-Centre' },
-    { id: '3', name: 'Oxytocin Injection', category: 'Maternal Care / Hemorrhage prevention', stockLevel: 60, burnRate: 3.5, minThreshold: 20, facility: 'Uthiramerur Taluk Hospital' },
-    { id: '4', name: 'Insulin (Human Mix)', category: 'Chronic Care / Endocrinology', stockLevel: 22, burnRate: 1.5, minThreshold: 25, facility: 'Kanchipuram PHC' },
-    { id: '5', name: 'IV Fluids (Normal Saline)', category: 'Critical Care / Rehydration', stockLevel: 80, burnRate: 6.0, minThreshold: 35, facility: 'Walajabad Sub-Centre' },
-    { id: '6', name: 'Metformin 500mg', category: 'Essential Oral Anti-diabetic', stockLevel: 14, burnRate: 4.2, minThreshold: 20, facility: 'Sriperumbudur PHC' },
-    { id: '7', name: 'Paracetamol 650mg', category: 'Basic Analgesic & Antipyretic', stockLevel: 90, burnRate: 12.0, minThreshold: 30, facility: 'Sriperumbudur PHC' }
-  ]);
+  const [medicines, setMedicines] = useState<MedicineStock[]>([]);
 
-  // Active emergency dispatches tracking
-  const [activeSOS, setActiveSOS] = useState<Record<string, {
-    timeLeft: number;
-    maxTime: number;
-    vehicle: string;
-  }>>({});
-
-  // 1. Invisible Simulation loop: Decrement stocks dynamically
+  // 1. Subscribe to Firestore medicines collection
   useEffect(() => {
-    const interval = setInterval(() => {
-      setMedicines((prevMeds) => {
-        return prevMeds.map((med) => {
-          const newStock = Math.max(0, med.stockLevel - (med.burnRate * 0.1));
-          
-          // Auto dispatch when stock drops <= minThreshold
-          if (newStock <= med.minThreshold && !activeSOS[med.id]) {
-            setActiveSOS((prevSOS) => ({
-              ...prevSOS,
-              [med.id]: {
-                timeLeft: 45, // 45s simulated courier delivery
-                maxTime: 45,
-                vehicle: `TN-19-EM-4${Math.floor(100 + Math.random() * 900)}`
-              }
-            }));
-          }
-          return {
-            ...med,
-            stockLevel: Math.round(newStock * 10) / 10
-          };
+    const unsubscribe = subscribeCollection('medicines', (fireMeds) => {
+      if (fireMeds && fireMeds.length > 0) {
+        // Sort by numeric ID to maintain order
+        const sorted = [...fireMeds].sort((a, b) => Number(a.id) - Number(b.id));
+        setMedicines(sorted);
+      } else {
+        // Initial fallback seeding of the 7 essential drugs
+        const initialMeds = [
+          { id: '1', name: 'Snake Antivenom', category: 'Lifesaving Venom Immunoglobulin', stockLevel: 45, burnRate: 1.8, minThreshold: 30, facility: 'Apol Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
+          { id: '2', name: 'Anti-Rabies Vaccine', category: 'Viral Prophylaxis', stockLevel: 18, burnRate: 2.2, minThreshold: 25, facility: 'Sunfeast Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
+          { id: '3', name: 'Oxytocin Injection', category: 'Maternal Care / Hemorrhage prevention', stockLevel: 60, burnRate: 3.5, minThreshold: 20, facility: 'Kamaraj Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
+          { id: '4', name: 'Insulin (Human Mix)', category: 'Chronic Care / Endocrinology', stockLevel: 22, burnRate: 1.5, minThreshold: 25, facility: 'Nehru Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
+          { id: '5', name: 'IV Fluids (Normal Saline)', category: 'Critical Care / Rehydration', stockLevel: 80, burnRate: 6.0, minThreshold: 35, facility: 'Gandhi Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
+          { id: '6', name: 'Metformin 500mg', category: 'Essential Oral Anti-diabetic', stockLevel: 14, burnRate: 4.2, minThreshold: 20, facility: 'Ambedkar Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
+          { id: '7', name: 'Paracetamol 650mg', category: 'Basic Analgesic & Antipyretic', stockLevel: 90, burnRate: 12.0, minThreshold: 30, facility: 'MGR Hospitals', isRestocking: false, restockEta: 0, vehicle: '' }
+        ];
+        initialMeds.forEach(m => {
+          updateFirestoreDoc('medicines', m.id, m);
         });
-      });
-    }, 1000);
+      }
+    });
 
-    return () => clearInterval(interval);
-  }, [activeSOS]);
+    return () => unsubscribe();
+  }, []);
 
-  // 2. Countdown loop: Tick emergency dispatch timers & restore stock on arrival
+  // 2. Local active clock for simulating burn rates and restocking countdowns remotely
   useEffect(() => {
     const timer = setInterval(() => {
-      setActiveSOS((prevSOS) => {
-        const nextSOS = { ...prevSOS };
-        let updated = false;
-
-        for (const [medId, sos] of Object.entries(nextSOS)) {
-          if (sos.timeLeft > 1) {
-            nextSOS[medId] = {
-              ...sos,
-              timeLeft: sos.timeLeft - 1
-            };
-            updated = true;
+      medicines.forEach((med) => {
+        // If restocking, decrement countdown
+        if (med.isRestocking && med.restockEta && med.restockEta > 0) {
+          const nextEta = med.restockEta - 1;
+          if (nextEta === 0) {
+            // Arrived! Reset stock level to 95%
+            updateFirestoreDoc('medicines', med.id, {
+              stockLevel: 95,
+              isRestocking: false,
+              restockEta: 0,
+              vehicle: ''
+            });
           } else {
-            // Restock to 95% on arrival
-            setMedicines((prevMeds) =>
-              prevMeds.map((med) =>
-                med.id === medId ? { ...med, stockLevel: 95 } : med
-              )
-            );
-            delete nextSOS[medId];
-            updated = true;
+            updateFirestoreDoc('medicines', med.id, { restockEta: nextEta });
+          }
+        } else if (!med.isRestocking) {
+          // Slowly decrement stock Level based on burn rate
+          const nextStock = Math.max(0, med.stockLevel - (med.burnRate * 0.05));
+          const rounded = Math.round(nextStock * 10) / 10;
+          
+          if (rounded !== med.stockLevel) {
+            updateFirestoreDoc('medicines', med.id, { stockLevel: rounded });
           }
         }
-        return updated ? nextSOS : prevSOS;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [medicines]);
 
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -140,7 +126,6 @@ export const MedicineTracker: React.FC = () => {
           gap: '20px'
         }}>
           {medicines.map((med) => {
-            const sos = activeSOS[med.id];
             const isLow = med.stockLevel <= med.minThreshold;
             
             return (
@@ -209,7 +194,7 @@ export const MedicineTracker: React.FC = () => {
                   alignItems: 'center',
                   gap: '8px'
                 }}>
-                  {sos ? (
+                  {med.isRestocking && med.restockEta && med.restockEta > 0 ? (
                     <div style={{ 
                       display: 'flex', 
                       alignItems: 'center', 
@@ -220,7 +205,7 @@ export const MedicineTracker: React.FC = () => {
                       width: '100%'
                     }}>
                       <Truck size={14} className="spin" />
-                      <span>Delivery en route ({sos.vehicle})</span>
+                      <span>Delivery en route ({med.vehicle})</span>
                       <span style={{ 
                         marginLeft: 'auto', 
                         fontSize: '0.78rem', 
@@ -230,7 +215,7 @@ export const MedicineTracker: React.FC = () => {
                         padding: '2px 6px', 
                         borderRadius: '4px' 
                       }}>
-                        {formatCountdown(sos.timeLeft)}
+                        {formatCountdown(med.restockEta)}
                       </span>
                     </div>
                   ) : (

@@ -190,6 +190,49 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                 firestore_payload["blood_inventory"] = blood_inv_list
 
             doc_ref.set(firestore_payload, merge=True)
+
+            # 3. Dynamic Medicine Sync: check if med_stock exists on this row
+            if "med_stock" in row and pd.notna(row["med_stock"]):
+                try:
+                    import datetime
+                    med_stock_val = int(float(row["med_stock"]))
+                    med_doc_ref = fs.collection("medicines").document(str(hosp_id_int))
+                    
+                    # Fetch existing doc to avoid overwriting category/burnRate
+                    med_doc = med_doc_ref.get()
+                    if med_doc.exists:
+                        med_doc_ref.update({
+                            "stockLevel": med_stock_val,
+                            "facility": str(row["name"]),
+                            "lastUpdated": datetime.datetime.utcnow().isoformat()
+                        })
+                    else:
+                        med_mapping = {
+                            1: {"name": "Snake Antivenom", "category": "Lifesaving Venom Immunoglobulin", "minThreshold": 30},
+                            2: {"name": "Anti-Rabies Vaccine", "category": "Viral Prophylaxis", "minThreshold": 25},
+                            3: {"name": "Oxytocin Injection", "category": "Maternal Care / Hemorrhage prevention", "minThreshold": 20},
+                            4: {"name": "Insulin (Human Mix)", "category": "Chronic Care / Endocrinology", "minThreshold": 25},
+                            5: {"name": "IV Fluids (Normal Saline)", "category": "Critical Care / Rehydration", "minThreshold": 35},
+                            6: {"name": "Metformin 500mg", "category": "Essential Oral Anti-diabetic", "minThreshold": 20},
+                            7: {"name": "Paracetamol 650mg", "category": "Basic Analgesic & Antipyretic", "minThreshold": 30}
+                        }
+                        med_info = med_mapping.get(hosp_id_int, {"name": f"Essential Drug {hosp_id_int}", "category": "General Medication", "minThreshold": 25})
+                        med_doc_ref.set({
+                            "id": str(hosp_id_int),
+                            "name": med_info["name"],
+                            "category": med_info["category"],
+                            "stockLevel": med_stock_val,
+                            "minThreshold": med_info["minThreshold"],
+                            "facility": str(row["name"]),
+                            "burnRate": 1.5,
+                            "isRestocking": False,
+                            "restockEta": 0,
+                            "vehicle": "",
+                            "lastUpdated": datetime.datetime.utcnow().isoformat()
+                        })
+                except Exception as ex:
+                    logger.error(f"❌ Medicine Firestore sync failed for hospital {hosp_id_int}: {ex}")
+
         print("✅ Firestore database synchronized successfully.")
 
 def extract_spreadsheet_id(url: str) -> str:
