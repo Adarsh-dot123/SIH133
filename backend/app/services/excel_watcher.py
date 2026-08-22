@@ -222,7 +222,6 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
 
             doc_ref.set(firestore_payload, merge=True)
 
-            # 3. Dynamic Medicine Sync: check if med columns exist on this row
             med_columns_map = {
                 "med_antivenom": {"name": "Snake Antivenom", "category": "Lifesaving Venom Immunoglobulin", "minThreshold": 30, "med_id": "1", "burnRate": 1.8},
                 "med_rabies": {"name": "Anti-Rabies Vaccine", "category": "Viral Prophylaxis", "minThreshold": 25, "med_id": "2", "burnRate": 2.2},
@@ -241,31 +240,20 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                         doc_id = f"{hosp_id_int}_{info['med_id']}"
                         med_doc_ref = fs.collection("medicines").document(doc_id)
                         
-                        med_doc = med_doc_ref.get()
-                        if med_doc.exists:
-                            med_doc_ref.update({
-                                "stockLevel": med_stock_val,
-                                "facility": str(row["name"]),
-                                "lastUpdated": datetime.datetime.utcnow().isoformat()
-                            })
-                        else:
-                            med_doc_ref.set({
-                                "id": doc_id,
-                                "med_id": info["med_id"],
-                                "hospital_id": hosp_id_int,
-                                "name": info["name"],
-                                "category": info["category"],
-                                "stockLevel": med_stock_val,
-                                "minThreshold": info["minThreshold"],
-                                "facility": str(row["name"]),
-                                "burnRate": info["burnRate"],
-                                "isRestocking": False,
-                                "restockEta": 0,
-                                "vehicle": "",
-                                "lastUpdated": datetime.datetime.utcnow().isoformat()
-                            })
-                    except Exception as ex:
-                        logger.error(f"❌ Medicine Firestore sync failed for hospital {hosp_id_int} column {col_name}: {ex}")
+                        med_doc_ref.set({
+                            "id": doc_id,
+                            "med_id": info["med_id"],
+                            "hospital_id": hosp_id_int,
+                            "name": info["name"],
+                            "category": info["category"],
+                            "stockLevel": med_stock_val,
+                            "stock_level": med_stock_val,
+                            "minThreshold": info["minThreshold"],
+                            "facility": str(row["name"]),
+                            "lastUpdated": datetime.datetime.utcnow().isoformat()
+                        }, merge=True)
+                    except Exception as me:
+                        logger.error(f"❌ Medicine sync failed for {doc_id}: {me}")
 
         print("✅ Firestore database synchronized successfully.")
 

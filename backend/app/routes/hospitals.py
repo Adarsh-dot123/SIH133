@@ -285,7 +285,27 @@ async def update_blood_inventory(
         "units_available": payload.units_available
     })
 
-    return {"message": "Blood inventory updated", "blood_group": payload.blood_group, "units": payload.units_available}
+@router.get("/medicines/all")
+def get_all_medicines(db: Session = Depends(get_db)):
+    meds = db.query(MedicineInventory).all()
+    res = []
+    for m in meds:
+        hosp = db.query(Hospital).filter(Hospital.id == m.hospital_id).first()
+        res.append({
+            "id": m.id,
+            "med_id": m.med_id,
+            "hospital_id": m.hospital_id,
+            "name": m.medicine_name,
+            "category": m.category,
+            "stockLevel": int(m.stock_level),
+            "burnRate": m.burn_rate,
+            "minThreshold": m.min_threshold,
+            "facility": hosp.name if hosp else f"Facility #{m.hospital_id}",
+            "isRestocking": m.is_restocking,
+            "restockEta": m.restock_eta,
+            "vehicle": m.vehicle or ""
+        })
+    return res
 
 @router.post("/{hospital_id}/medicines/{med_id}/resupply")
 async def dispatch_medicine_resupply(

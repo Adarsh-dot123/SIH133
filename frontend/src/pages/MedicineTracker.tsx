@@ -21,36 +21,54 @@ interface MedicineStock {
   vehicle?: string;
 }
 
+const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
+
 export const MedicineTracker: React.FC = () => {
   const { t } = useLanguage();
   const [medicines, setMedicines] = useState<MedicineStock[]>([]);
   const [selectedFacility, setSelectedFacility] = useState<string>('ALL');
 
-  // 1. Subscribe to Firestore medicines collection
+  const fetchMedicinesFromBackend = async () => {
+    try {
+      const res = await fetch(`${API}/api/hospitals/medicines/all`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.length > 0) {
+          setMedicines(data);
+        }
+      }
+    } catch { /* fallback to firestore */ }
+  };
+
+  // 1. Fetch live medicine inventory from backend SQLite (synced from Google Sheet) + Firestore
   useEffect(() => {
+    fetchMedicinesFromBackend();
+    const interval = setInterval(fetchMedicinesFromBackend, 3000);
+
     const unsubscribe = subscribeCollection('medicines', (fireMeds) => {
       if (fireMeds && fireMeds.length > 0) {
-        // Sort by compound ID to maintain order
-        const sorted = [...fireMeds].sort((a, b) => a.id.localeCompare(b.id));
-        setMedicines(sorted);
-      } else {
-        // Seeding default composite medicines mapped to fake hospitals
-        const initialMeds = [
-          { id: '1_1', med_id: '1', hospital_id: 1, name: 'Snake Antivenom', category: 'Lifesaving Venom Immunoglobulin', stockLevel: 45, burnRate: 1.8, minThreshold: 30, facility: 'Apol Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
-          { id: '2_2', med_id: '2', hospital_id: 2, name: 'Anti-Rabies Vaccine', category: 'Viral Prophylaxis', stockLevel: 18, burnRate: 2.2, minThreshold: 25, facility: 'Sunfeast Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
-          { id: '3_3', med_id: '3', hospital_id: 3, name: 'Oxytocin Injection', category: 'Maternal Care / Hemorrhage prevention', stockLevel: 60, burnRate: 3.5, minThreshold: 20, facility: 'Kamaraj Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
-          { id: '4_4', med_id: '4', hospital_id: 4, name: 'Insulin (Human Mix)', category: 'Chronic Care / Endocrinology', stockLevel: 22, burnRate: 1.5, minThreshold: 25, facility: 'Nehru Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
-          { id: '5_5', med_id: '5', hospital_id: 5, name: 'IV Fluids (Normal Saline)', category: 'Critical Care / Rehydration', stockLevel: 80, burnRate: 6.0, minThreshold: 35, facility: 'Gandhi Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
-          { id: '6_6', med_id: '6', hospital_id: 6, name: 'Metformin 500mg', category: 'Essential Oral Anti-diabetic', stockLevel: 14, burnRate: 4.2, minThreshold: 20, facility: 'Ambedkar Hospitals', isRestocking: false, restockEta: 0, vehicle: '' },
-          { id: '7_7', med_id: '7', hospital_id: 7, name: 'Paracetamol 650mg', category: 'Basic Analgesic & Antipyretic', stockLevel: 90, burnRate: 12.0, minThreshold: 30, facility: 'MGR Hospitals', isRestocking: false, restockEta: 0, vehicle: '' }
-        ];
-        initialMeds.forEach(m => {
-          updateFirestoreDoc('medicines', m.id, m);
+        // Normalize fields (handle both stockLevel and stock_level)
+        const normalized = fireMeds.map((m: any) => {
+          const rawStock = m.stockLevel !== undefined ? m.stockLevel : (m.stock_level !== undefined ? m.stock_level : 0);
+          const rawThresh = m.minThreshold !== undefined ? m.minThreshold : (m.min_threshold !== undefined ? m.min_threshold : 20);
+          const numStock = Number(rawStock);
+          const numThresh = Number(rawThresh);
+          return {
+            ...m,
+            stockLevel: isNaN(numStock) ? 0 : numStock,
+            minThreshold: isNaN(numThresh) ? 20 : numThresh,
+            facility: m.facility || m.hospital_name || `Facility #${m.hospital_id}`,
+          };
         });
+        const sorted = normalized.sort((a: any, b: any) => a.id.localeCompare(b.id));
+        setMedicines(sorted);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, []);
 
 
@@ -203,7 +221,7 @@ export const MedicineTracker: React.FC = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '9999px', overflow: 'hidden' }}>
                       <div style={{
-                        width: `${Math.max(med.stockLevel, isEmpty ? 100 : 0)}%`,
+                        width: `${isEmpty ? 100 : Math.min(100, Math.max(0, med.stockLevel))}%`,
                         height: '100%',
                         background: barColor,
                         transition: 'width 0.3s ease',
