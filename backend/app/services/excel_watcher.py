@@ -358,8 +358,9 @@ async def tick_sqlite_medicine_timers():
                             fs.collection("medicines").document(doc_id).update({
                                 "restockEta": mi.restock_eta
                             })
-                    except Exception:
-                        pass
+                            print(f"⏱️ Restocking {mi.medicine_name} for facility {mi.hospital_id}: {mi.restock_eta}s remaining")
+                    except Exception as fs_err:
+                        print(f"❌ Error updating Firestore restock ETA: {fs_err}")
                 else:
                     mi.is_restocking = False
                     mi.restock_eta = 0
@@ -377,8 +378,9 @@ async def tick_sqlite_medicine_timers():
                                 "restockEta": 0,
                                 "vehicle": ""
                             })
+                            print(f"✅ Delivery complete for {mi.medicine_name} at facility {mi.hospital_id}")
                     except Exception as fs_err:
-                        pass
+                        print(f"❌ Error updating Firestore restock completion: {fs_err}")
 
                     # Write back to Google Sheets!
                     update_google_sheet_cell(mi.hospital_id, mi.med_id, 95)
@@ -401,14 +403,14 @@ async def tick_sqlite_medicine_timers():
                                     fs.collection("medicines").document(doc_id).update({
                                         "stockLevel": new_int
                                     })
-                            except Exception:
-                                pass
+                            except Exception as fs_err:
+                                print(f"❌ Error updating Firestore consumption: {fs_err}")
                             
                             # Write back to Google Sheet!
                             update_google_sheet_cell(mi.hospital_id, mi.med_id, new_int)
             db.commit()
         except Exception as e:
-            pass
+            print(f"❌ Exception in tick_sqlite_medicine_timers main loop: {e}")
         finally:
             db.close()
 

@@ -241,13 +241,18 @@ export function App() {
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onAuthSuccess={(user) => {
+          const isAdmin = user.email === 'admin@medflow.gov.in';
+          const role: UserRole = isAdmin ? 'GOVT_ADMIN' : 'PATIENT';
           setCurrentUser({
             id: user.uid,
             email: user.email,
-            full_name: user.displayName || 'Patient User',
-            role: 'PATIENT'
+            full_name: user.displayName || (isAdmin ? 'Government Admin' : 'Patient User'),
+            role: role
           });
+          setCurrentRole(role);
+          setActiveTab(ROLE_DEFAULT_TAB[role]);
         }}
+        onSwitchToStaffLogin={() => setActiveTab('login')}
       />
 
       {/* Hospital Admin Live Editor (Firestore Sync) */}

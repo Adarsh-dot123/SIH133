@@ -176,7 +176,8 @@ export const onPatientAuthStateChanged = (callback: (user: PatientUser | null) =
 };
 
 export const signUpPatient = async (email: string, password: string, name: string, phone: string): Promise<PatientUser> => {
-  if (!isMock && auth) {
+  const isFakeKey = firebaseConfig.apiKey.includes("FakeKey");
+  if (!isMock && auth && !isFakeKey) {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const uid = userCredential.user.uid;
     try {
@@ -219,7 +220,9 @@ export const signUpPatient = async (email: string, password: string, name: strin
 };
 
 export const loginPatient = async (email: string, password: string): Promise<PatientUser> => {
-  if (!isMock && auth) {
+  const isFakeKey = firebaseConfig.apiKey.includes("FakeKey");
+  const isAdmin = email === "admin@medflow.gov.in";
+  if (!isMock && auth && !isFakeKey && !isAdmin) {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const uid = userCredential.user.uid;
     try {
@@ -236,9 +239,9 @@ export const loginPatient = async (email: string, password: string): Promise<Pat
     };
   } else {
     mockCurrentUser = {
-      uid: "mock-uid-12345",
+      uid: isAdmin ? "mock-admin-uid-999" : "mock-uid-12345",
       email,
-      displayName: "Ramesh Sundaram"
+      displayName: isAdmin ? "Government Admin" : "Ramesh Sundaram"
     };
     if (mockStore['patient_records'] && mockStore['patient_records'][mockCurrentUser.uid]) {
       mockStore['patient_records'][mockCurrentUser.uid].lastLoginAt = new Date().toISOString();
@@ -249,7 +252,8 @@ export const loginPatient = async (email: string, password: string): Promise<Pat
 };
 
 export const loginPatientWithGoogle = async (): Promise<PatientUser> => {
-  if (!isMock && auth) {
+  const isFakeKey = firebaseConfig.apiKey.includes("FakeKey");
+  if (!isMock && auth && !isFakeKey) {
     const provider = new GoogleAuthProvider();
     const userCredential = await signInWithPopup(auth, provider);
     return {

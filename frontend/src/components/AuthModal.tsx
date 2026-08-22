@@ -6,9 +6,10 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAuthSuccess: (user: PatientUser) => void;
+  onSwitchToStaffLogin?: () => void;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess, onSwitchToStaffLogin }) => {
   const [isSignUp, setIsSignUp] = useState<boolean>(false);
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -260,6 +261,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
               {isSignUp ? 'Already have an account? Sign In' : 'New to MedFlow? Create an Account'}
             </button>
           </div>
+
+          {/* Staff Login Link */}
+          {onSwitchToStaffLogin && (
+            <div style={{ textAlign: 'center', marginTop: '4px', borderTop: '1px dashed #e2e8f0', paddingTop: '8px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  onSwitchToStaffLogin();
+                  onClose();
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#0d9488',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Government Admin or Hospital Staff? Sign In Here
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>
