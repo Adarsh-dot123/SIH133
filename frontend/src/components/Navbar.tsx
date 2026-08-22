@@ -36,7 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="navbar">
       <div className="navbar-inner">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
           <a href="#" className="brand-logo" onClick={(e) => { 
             e.preventDefault(); 
             onTabChange(currentRole === 'PATIENT' ? 'patient-search' : currentRole === 'HOSPITAL_STAFF' ? 'hospital-dashboard' : 'govt-overview'); 
@@ -44,7 +44,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div style={{
               width: '36px', height: '36px', borderRadius: '10px',
               background: 'linear-gradient(135deg, #0d9488, #4f46e5)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff'
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+              flexShrink: 0
             }}>
               <Activity size={22} />
             </div>
@@ -101,12 +102,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={() => onTabChange('hospital-dashboard')}
               >
                 <Building2 size={16} /> {t('ward_bed_grid', 'Ward & Bed Grid')}
-              </button>
-              <button
-                className={`nav-item ${activeTab === 'clinical-turnover' ? 'active' : ''}`}
-                onClick={() => onTabChange('clinical-turnover')}
-              >
-                <Sparkles size={16} /> {t('ml_turnover_engine', 'ML Turnover Engine')}
               </button>
               <button
                 className={`nav-item ${activeTab === 'abdm-hub' ? 'active' : ''}`}
