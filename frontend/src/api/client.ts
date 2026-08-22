@@ -113,6 +113,12 @@ class ApiClient {
     });
   }
 
+  async dispatchMedicineResupply(hospitalId: number, medId: string) {
+    return this.request<{ message: string; vehicle: string }>(`/hospitals/${hospitalId}/medicines/${medId}/resupply`, {
+      method: 'POST',
+    });
+  }
+
   // Beds
   async getBeds(hospitalId?: number) {
     const query = hospitalId ? `?hospital_id=${hospitalId}` : '';

@@ -286,3 +286,43 @@ async def update_blood_inventory(
     })
 
     return {"message": "Blood inventory updated", "blood_group": payload.blood_group, "units": payload.units_available}
+
+@router.post("/{hospital_id}/medicines/{med_id}/resupply")
+async def dispatch_medicine_resupply(
+    hospital_id: int,
+    med_id: str,
+    db: Session = Depends(get_db)
+):
+    import random
+    # Check if hospital exists
+    hosp = db.query(Hospital).filter(Hospital.id == hospital_id).first()
+    if not hosp:
+        raise HTTPException(status_code=404, detail="Hospital not found")
+        
+    vehicle_id = f"TN-19-EM-4{random.randint(100, 999)}"
+    
+    # Blockchain Audit Log
+    audit_service.log_action(
+        db=db,
+        actor_email="admin@medflow.gov.in",
+        actor_role="GOVT_ADMIN",
+        action="MEDICINE_RESUPPLY_DISPATCHED",
+        resource_type="MEDICINE",
+        resource_id=f"{hospital_id}-{med_id}",
+        previous_value="STATUS: CRITICAL",
+        new_value=f"VAN DISPATCHED: {vehicle_id}",
+        hospital_id=hospital_id
+    )
+
+    # Broadcast WebSocket to display live browser notification toasts
+    await manager.broadcast("MEDICINE_RESUPPLY_DISPATCHED", {
+        "hospital_id": hospital_id,
+        "hospital_name": hosp.name,
+        "med_id": med_id,
+        "vehicle": vehicle_id
+    })
+
+    return {
+        "message": "Medicine resupply dispatch logged in blockchain audit trail and broadcast successfully",
+        "vehicle": vehicle_id
+    }

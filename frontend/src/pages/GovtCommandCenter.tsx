@@ -314,11 +314,17 @@ export const GovtCommandCenter: React.FC = () => {
                   ) : (
                     <button
                       onClick={async () => {
+                        const vehicle = `TN-19-EM-4${Math.floor(100 + Math.random() * 900)}`;
                         await updateFirestoreDoc('medicines', med.id, {
                           isRestocking: true,
                           restockEta: 45,
-                          vehicle: `TN-19-EM-4${Math.floor(100 + Math.random() * 900)}`
+                          vehicle: vehicle
                         });
+                        try {
+                          await api.dispatchMedicineResupply(med.hospital_id || 1, med.med_id || med.id);
+                        } catch (err) {
+                          console.error("Failed to log resupply dispatch on backend:", err);
+                        }
                       }}
                       className={`btn btn-xs ${isLow ? 'btn-primary animate-pulse' : 'btn-secondary'}`}
                       style={{ width: '100%', fontSize: '0.72rem', padding: '4px' }}
