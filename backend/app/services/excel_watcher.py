@@ -107,30 +107,35 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
 
             hosp = db_sql.query(Hospital).filter(Hospital.id == hosp_id).first()
             if hosp:
+                # Dynamically update the name in SQLite to match the Google Sheet
+                if "name" in row and pd.notna(row["name"]):
+                    hosp.name = str(row["name"])
+
                 # Update each type of bed
                 update_beds_status(db_sql, hosp_id, "GENERAL", int(row.get("general_beds_available", 0)), int(row.get("general_beds_total", 0)))
                 update_beds_status(db_sql, hosp_id, "ICU", int(row.get("icu_beds_available", 0)), int(row.get("icu_beds_total", 0)))
                 update_beds_status(db_sql, hosp_id, "VENTILATOR", int(row.get("ventilators_available", 0)), int(row.get("ventilators_total", 0)))
                 update_beds_status(db_sql, hosp_id, "OXYGEN_SUPPORTED", int(row.get("oxygen_beds_available", 0)), int(row.get("oxygen_beds_total", 0)))
 
-                # Update blood availability
+                # Update blood availability (only if columns exist in Google Sheet)
                 for col_name, blood_grp in blood_groups_map.items():
-                    val = row.get(col_name)
-                    if pd.notna(val):
-                        bi = db_sql.query(BloodInventory).filter(
-                            BloodInventory.hospital_id == hosp_id,
-                            BloodInventory.blood_group == blood_grp
-                        ).first()
-                        if bi:
-                            bi.units_available = int(val)
-                        else:
-                            bi = BloodInventory(
-                                hospital_id=hosp_id,
-                                blood_group=blood_grp,
-                                units_available=int(val),
-                                units_critical_threshold=5
-                            )
-                            db_sql.add(bi)
+                    if col_name in row:
+                        val = row.get(col_name)
+                        if pd.notna(val):
+                            bi = db_sql.query(BloodInventory).filter(
+                                BloodInventory.hospital_id == hosp_id,
+                                BloodInventory.blood_group == blood_grp
+                            ).first()
+                            if bi:
+                                bi.units_available = int(val)
+                            else:
+                                bi = BloodInventory(
+                                    hospital_id=hosp_id,
+                                    blood_group=blood_grp,
+                                    units_available=int(val),
+                                    units_critical_threshold=5
+                                )
+                                db_sql.add(bi)
         db_sql.commit()
         print("✅ SQLite database synchronized successfully.")
     except Exception as e:
@@ -154,17 +159,21 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
 
             doc_ref = fs.collection("hospitals").document(hosp_id)
             
-            # Construct the blood inventory list matching standard schemas
+            # Construct the blood inventory list matching standard schemas (if columns exist)
             blood_inv_list = []
-            for col_name, blood_grp in blood_groups_map.items():
-                val = row.get(col_name)
-                if pd.notna(val):
-                    blood_inv_list.append({
-                        "blood_group": blood_grp,
-                        "units_available": int(val)
-                    })
+            has_blood_cols = any(col_name in row for col_name in blood_groups_map)
+            
+            if has_blood_cols:
+                for col_name, blood_grp in blood_groups_map.items():
+                    if col_name in row:
+                        val = row.get(col_name)
+                        if pd.notna(val):
+                            blood_inv_list.append({
+                                "blood_group": blood_grp,
+                                "units_available": int(val)
+                            })
 
-            doc_ref.set({
+            firestore_payload = {
                 "id": hosp_id,
                 "name": str(row["name"]),
                 "general_beds_available": int(row.get("general_beds_available", 0)),
@@ -175,9 +184,12 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                 "ventilators_total": int(row.get("ventilators_total", 0)),
                 "oxygen_beds_available": int(row.get("oxygen_beds_available", 0)),
                 "oxygen_beds_total": int(row.get("oxygen_beds_total", 0)),
-                "doctors_on_duty": int(row.get("doctors_on_duty", 0)),
-                "blood_inventory": blood_inv_list
-            }, merge=True)
+                "doctors_on_duty": int(row.get("doctors_on_duty", 0))
+            }
+            if has_blood_cols:
+                firestore_payload["blood_inventory"] = blood_inv_list
+
+            doc_ref.set(firestore_payload, merge=True)
         print("✅ Firestore database synchronized successfully.")
 
 def extract_spreadsheet_id(url: str) -> str:
