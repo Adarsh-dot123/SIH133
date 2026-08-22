@@ -7,7 +7,7 @@ import {
 import { GovtCommandOverview, DistrictAlert, DistrictOverviewItem } from '../types';
 import { api, createWebSocketSubscriber } from '../api/client';
 import { subscribeCollection, updateFirestoreDoc } from '../firebase';
-import { fetchLiveMedicines, MedicineStock, DEFAULT_MEDICINES, saveDispatchedOverride } from '../services/medicineService';
+import { fetchLiveMedicines, MedicineStock, DEFAULT_MEDICINES, saveDispatchedOverride, syncStockUpdateToCloud } from '../services/medicineService';
 
 export const GovtCommandCenter: React.FC = () => {
   const [overview, setOverview] = useState<GovtCommandOverview | null>(null);
@@ -52,6 +52,7 @@ export const GovtCommandCenter: React.FC = () => {
           const nextEta = m.restockEta - 1;
           if (nextEta <= 0) {
             saveDispatchedOverride(m.id, { stockLevel: 100, isRestocking: false, restockEta: 0 });
+            syncStockUpdateToCloud(m.hospital_id, m.med_id, 100);
             return { ...m, isRestocking: false, restockEta: 0, stockLevel: 100 };
           }
           saveDispatchedOverride(m.id, { stockLevel: m.stockLevel, isRestocking: true, restockEta: nextEta, vehicle: m.vehicle });
@@ -63,7 +64,7 @@ export const GovtCommandCenter: React.FC = () => {
     return () => clearInterval(ticker);
   }, []);
 
-  // Dynamic burn rate consumption simulation: depletes active stock by 1% every 6s
+  // Dynamic burn rate consumption simulation: depletes active stock by 1% every 6s & syncs to Google Sheets / Firebase
   useEffect(() => {
     const burnTicker = setInterval(() => {
       setMedicines(prev => prev.map(m => {
@@ -74,6 +75,7 @@ export const GovtCommandCenter: React.FC = () => {
             isRestocking: false,
             restockEta: 0
           });
+          syncStockUpdateToCloud(m.hospital_id, m.med_id, nextStock);
           return { ...m, stockLevel: nextStock };
         }
         return m;

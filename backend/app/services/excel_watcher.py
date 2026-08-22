@@ -361,7 +361,7 @@ async def tick_sqlite_medicine_timers():
                     mi.is_restocking = False
                     mi.restock_eta = 0
                     mi.vehicle = ""
-                    mi.stock_level = 95.0
+                    mi.stock_level = 100.0
                     
                     # Update Firestore
                     if not FIRESTORE_DISABLED:
@@ -370,8 +370,8 @@ async def tick_sqlite_medicine_timers():
                             if fs:
                                 doc_id = f"{mi.hospital_id}_{mi.med_id}"
                                 fs.collection("medicines").document(doc_id).set({
-                                    "stockLevel": 95,
-                                    "stock_level": 95,
+                                    "stockLevel": 100,
+                                    "stock_level": 100,
                                     "isRestocking": False,
                                     "restockEta": 0,
                                     "vehicle": ""
@@ -383,7 +383,33 @@ async def tick_sqlite_medicine_timers():
                             print(f"❌ Error updating Firestore restock completion: {fs_err}")
 
                     # Write back to Google Sheets!
-                    update_google_sheet_cell(mi.hospital_id, mi.med_id, 95)
+                    update_google_sheet_cell(mi.hospital_id, mi.med_id, 100)
+
+            # 2. Dynamic continuous hospital medicine burn rate / consumption sync
+            if tick_count % 10 == 0:
+                all_stocked = db.query(MedicineInventory).filter(
+                    MedicineInventory.is_restocking == False,
+                    MedicineInventory.stock_level > 0
+                ).all()
+                for mi in all_stocked:
+                    new_stock = max(0, int(mi.stock_level - 1))
+                    if new_stock != int(mi.stock_level):
+                        mi.stock_level = float(new_stock)
+                        # 1. Update Google Sheet in real time
+                        update_google_sheet_cell(mi.hospital_id, mi.med_id, new_stock)
+                        # 2. Update Firestore in real time
+                        if not FIRESTORE_DISABLED:
+                            try:
+                                fs = init_firebase_admin()
+                                if fs:
+                                    doc_id = f"{mi.hospital_id}_{mi.med_id}"
+                                    fs.collection("medicines").document(doc_id).set({
+                                        "stockLevel": new_stock,
+                                        "stock_level": new_stock
+                                    }, merge=True)
+                            except Exception:
+                                pass
+
             db.commit()
         except Exception as e:
             print(f"❌ Exception in tick_sqlite_medicine_timers main loop: {e}")

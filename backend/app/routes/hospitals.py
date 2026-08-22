@@ -1,5 +1,6 @@
 import json
 from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -370,3 +371,39 @@ async def dispatch_medicine_resupply(
         "vehicle": vehicle_id,
         "restock_eta": RESTOCK_SECONDS
     }
+
+
+class MedicineStockUpdate(BaseModel):
+    stock_level: int
+
+@router.patch("/{hospital_id}/medicines/{med_id}/stock")
+async def update_medicine_stock_level(
+    hospital_id: int,
+    med_id: str,
+    payload: MedicineStockUpdate,
+    db: Session = Depends(get_db)
+):
+    from app.services.excel_watcher import update_google_sheet_cell, init_firebase_admin
+    doc_id = f"{hospital_id}_{med_id}"
+    mi = db.query(MedicineInventory).filter(MedicineInventory.id == doc_id).first()
+    if mi:
+        mi.stock_level = float(payload.stock_level)
+        db.commit()
+    
+    # 1. Sync to Google Sheets
+    from starlette.concurrency import run_in_threadpool
+    import asyncio
+    asyncio.create_task(run_in_threadpool(update_google_sheet_cell, hospital_id, med_id, payload.stock_level))
+
+    # 2. Sync to Firestore
+    try:
+        fs = init_firebase_admin()
+        if fs:
+            fs.collection("medicines").document(doc_id).set({
+                "stockLevel": payload.stock_level,
+                "stock_level": payload.stock_level
+            }, merge=True)
+    except Exception:
+        pass
+
+    return {"status": "success", "stock_level": payload.stock_level}

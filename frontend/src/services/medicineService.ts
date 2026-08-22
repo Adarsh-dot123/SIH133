@@ -57,6 +57,16 @@ export function saveDispatchedOverride(id: string, override: { stockLevel: numbe
   } catch {}
 }
 
+export async function syncStockUpdateToCloud(hospital_id: number, med_id: string, stockLevel: number) {
+  try {
+    await fetch(`${API}/api/hospitals/${hospital_id}/medicines/${med_id}/stock`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stock_level: stockLevel })
+    });
+  } catch {}
+}
+
 export const DEFAULT_MEDICINES: MedicineStock[] = DEFAULT_HOSPITALS.flatMap(h => {
   return Object.values(MED_CONFIG).map(c => ({
     id: `${h.id}_${c.id}`,
