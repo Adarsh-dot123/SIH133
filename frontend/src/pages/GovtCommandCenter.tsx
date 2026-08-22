@@ -130,7 +130,7 @@ export const GovtCommandCenter: React.FC = () => {
       if (ov.districts.length > 0) {
         setSelectedDistrict((prev) => {
           if (!prev) return ov.districts[0];
-          const updated = ov.districts.find(d => d.district_id === prev.district_id);
+          const updated = ov.districts.find((d: any) => d.district_id === prev.district_id);
           return updated || ov.districts[0];
         });
       }

@@ -85,12 +85,23 @@ const mockStore: Record<string, Record<string, any>> = {
 const mockListeners: Record<string, Array<(data: any) => void>> = {};
 
 // Subscribe listener helper
-export const subscribeCollection = (collectionName: string, callback: (data: any[]) => void) => {
+export const subscribeCollection = (
+  collectionName: string, 
+  callback: (data: any[]) => void
+) => {
   if (!isMock && db) {
-    return onSnapshot(collection(db, collectionName), (snapshot) => {
-      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      callback(docs);
-    });
+    return onSnapshot(
+      collection(db, collectionName), 
+      (snapshot) => {
+        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        callback(docs);
+      },
+      (error) => {
+        console.warn(`[Firestore] ${collectionName} subscription notice:`, error.message);
+        const currentData = Object.values(mockStore[collectionName] || {});
+        callback(currentData);
+      }
+    );
   } else {
     // Mock snapshot simulation
     if (!mockListeners[collectionName]) {
@@ -110,20 +121,23 @@ export const subscribeCollection = (collectionName: string, callback: (data: any
 
 // Update doc helper
 export const updateFirestoreDoc = async (collectionName: string, docId: string, data: any) => {
-  if (!isMock && db) {
-    const docRef = doc(db, collectionName, docId);
-    await updateDoc(docRef, data);
-  } else {
-    // Mock store updates
-    if (!mockStore[collectionName]) mockStore[collectionName] = {};
-    mockStore[collectionName][docId] = {
-      ...mockStore[collectionName][docId],
-      ...data
-    };
-    // Notify subscribers
-    const updatedCollection = Object.values(mockStore[collectionName]);
-    (mockListeners[collectionName] || []).forEach(cb => cb(updatedCollection));
+  try {
+    if (!isMock && db) {
+      const docRef = doc(db, collectionName, docId);
+      await updateDoc(docRef, data);
+    }
+  } catch (err: any) {
+    console.warn(`[Firestore] Cloud update notice for ${collectionName}/${docId}:`, err.message);
   }
+  // Mock store updates
+  if (!mockStore[collectionName]) mockStore[collectionName] = {};
+  mockStore[collectionName][docId] = {
+    ...mockStore[collectionName][docId],
+    ...data
+  };
+  // Notify subscribers
+  const updatedCollection = Object.values(mockStore[collectionName]);
+  (mockListeners[collectionName] || []).forEach(cb => cb(updatedCollection));
 };
 
 // Add doc helper

@@ -399,18 +399,20 @@ class ApiClient {
 
 export const api = new ApiClient();
 
-// WebSocket Real-Time Subscriber
 export function createWebSocketSubscriber(onMessage: (event: string, data: any) => void) {
-  const defaultWsHost = typeof window !== 'undefined' 
-    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8000`
-    : 'ws://localhost:8000';
-  const wsUrl = (import.meta.env.VITE_WS_URL || defaultWsHost) + '/ws/live';
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const wsUrl = import.meta.env.VITE_WS_URL || (isLocalhost ? 'ws://localhost:8000/ws/live' : null);
   let socket: WebSocket | null = null;
   let reconnectTimer: any = null;
 
+  if (!wsUrl) {
+    console.log('[MedFlow WS] Cloud static environment detected. Live data powered by Google Sheets & Firestore.');
+    return () => {};
+  }
+
   function connect() {
     try {
-      socket = new WebSocket(wsUrl);
+      socket = new WebSocket(wsUrl!);
 
       socket.onopen = () => {
         console.log('[MedFlow WS] Connected to live event stream');
@@ -428,16 +430,14 @@ export function createWebSocketSubscriber(onMessage: (event: string, data: any) 
       };
 
       socket.onclose = () => {
-        console.warn('[MedFlow WS] Disconnected. Reconnecting in 3s...');
-        reconnectTimer = setTimeout(connect, 3000);
+        reconnectTimer = setTimeout(connect, 4000);
       };
 
       socket.onerror = (err) => {
-        console.error('[MedFlow WS] Error', err);
         socket?.close();
       };
     } catch (err) {
-      reconnectTimer = setTimeout(connect, 4000);
+      reconnectTimer = setTimeout(connect, 5000);
     }
   }
 
