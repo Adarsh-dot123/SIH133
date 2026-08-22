@@ -321,7 +321,7 @@ async def dispatch_medicine_resupply(
         raise HTTPException(status_code=404, detail="Hospital not found")
         
     vehicle_id = f"TN-19-EM-4{random.randint(100, 999)}"
-    RESTOCK_SECONDS = 60  # 60 second delivery timer
+    RESTOCK_SECONDS = 15  # 15 second delivery timer
     
     # Update local SQLite database state
     doc_id = f"{hospital_id}_{med_id}"
