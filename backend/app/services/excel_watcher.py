@@ -340,14 +340,26 @@ def update_google_sheet_cell(hospital_id: int, med_id: str, value: int):
         print(f"❌ Error updating Google Sheet cell: {e}")
 
 async def tick_sqlite_medicine_timers():
+    tick_count = 0
     while True:
         await asyncio.sleep(1)
+        tick_count += 1
         db = SessionLocal()
         try:
-            items = db.query(MedicineInventory).filter(MedicineInventory.is_restocking == True).all()
-            for mi in items:
+            # 1. Update restocking countdowns
+            items_restocking = db.query(MedicineInventory).filter(MedicineInventory.is_restocking == True).all()
+            for mi in items_restocking:
                 if mi.restock_eta > 1:
                     mi.restock_eta -= 1
+                    try:
+                        fs = init_firebase_admin()
+                        if fs:
+                            doc_id = f"{mi.hospital_id}_{mi.med_id}"
+                            fs.collection("medicines").document(doc_id).update({
+                                "restockEta": mi.restock_eta
+                            })
+                    except Exception:
+                        pass
                 else:
                     mi.is_restocking = False
                     mi.restock_eta = 0
@@ -370,6 +382,30 @@ async def tick_sqlite_medicine_timers():
 
                     # Write back to Google Sheets!
                     update_google_sheet_cell(mi.hospital_id, mi.med_id, 95)
+            
+            # 2. Simulate consumption (burn rate) every 10 seconds
+            if tick_count % 10 == 0:
+                all_items = db.query(MedicineInventory).all()
+                for mi in all_items:
+                    if not mi.is_restocking:
+                        prev_int = int(mi.stock_level)
+                        mi.stock_level = max(0.0, mi.stock_level - (mi.burn_rate * 0.167))
+                        new_int = int(mi.stock_level)
+                        
+                        if new_int != prev_int:
+                            # Update Firestore
+                            try:
+                                fs = init_firebase_admin()
+                                if fs:
+                                    doc_id = f"{mi.hospital_id}_{mi.med_id}"
+                                    fs.collection("medicines").document(doc_id).update({
+                                        "stockLevel": new_int
+                                    })
+                            except Exception:
+                                pass
+                            
+                            # Write back to Google Sheet!
+                            update_google_sheet_cell(mi.hospital_id, mi.med_id, new_int)
             db.commit()
         except Exception as e:
             pass

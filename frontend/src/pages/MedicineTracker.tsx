@@ -53,28 +53,6 @@ export const MedicineTracker: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. Local active clock for simulating restocking countdowns remotely
-  useEffect(() => {
-    const timer = setInterval(() => {
-      medicines.forEach((med) => {
-        if (med.isRestocking && med.restockEta && med.restockEta > 0) {
-          const nextEta = med.restockEta - 1;
-          if (nextEta === 0) {
-            updateFirestoreDoc('medicines', med.id, {
-              stockLevel: 95,
-              isRestocking: false,
-              restockEta: 0,
-              vehicle: ''
-            });
-          } else {
-            updateFirestoreDoc('medicines', med.id, { restockEta: nextEta });
-          }
-        }
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [medicines]);
 
   // Extract unique facilities for filter selector
   const facilitiesList = ['ALL', ...Array.from(new Set(medicines.map(m => m.facility)))];

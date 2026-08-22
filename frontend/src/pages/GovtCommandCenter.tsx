@@ -31,27 +31,6 @@ export const GovtCommandCenter: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Handle local resupply eta tick
-  useEffect(() => {
-    const timer = setInterval(() => {
-      medicines.forEach((med) => {
-        if (med.isRestocking && med.restockEta && med.restockEta > 0) {
-          const nextEta = med.restockEta - 1;
-          if (nextEta === 0) {
-            updateFirestoreDoc('medicines', med.id, {
-              stockLevel: 95,
-              isRestocking: false,
-              restockEta: 0,
-              vehicle: ''
-            });
-          } else {
-            updateFirestoreDoc('medicines', med.id, { restockEta: nextEta });
-          }
-        }
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [medicines]);
 
   // Reallocation modal state
   const [isReallocating, setIsReallocating] = useState<boolean>(false);
