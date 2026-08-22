@@ -1,3 +1,57 @@
+// Predefined Tamil Nadu & Karnataka location lookup with GPS coordinates
+const KNOWN_LOCATIONS = [
+  // Chennai Areas
+  { label: 'T. Nagar, Chennai', lat: 13.0450, lng: 80.2400 },
+  { label: 'Anna Nagar, Chennai', lat: 13.0850, lng: 80.2101 },
+  { label: 'Adyar, Chennai', lat: 13.0012, lng: 80.2565 },
+  { label: 'Velachery, Chennai', lat: 12.9754, lng: 80.2191 },
+  { label: 'Tambaram, Chennai', lat: 12.9249, lng: 80.1000 },
+  { label: 'Porur, Chennai', lat: 13.0358, lng: 80.1573 },
+  { label: 'Chromepet, Chennai', lat: 12.9516, lng: 80.1462 },
+  { label: 'Perambur, Chennai', lat: 13.1169, lng: 80.2341 },
+  { label: 'Guindy, Chennai', lat: 13.0067, lng: 80.2206 },
+  { label: 'Greams Road, Chennai', lat: 13.0567, lng: 80.2569 },
+  { label: 'Royapettah, Chennai', lat: 13.0518, lng: 80.2647 },
+  { label: 'Egmore, Chennai', lat: 13.0732, lng: 80.2609 },
+  { label: 'Nungambakkam, Chennai', lat: 13.0580, lng: 80.2427 },
+  { label: 'Mylapore, Chennai', lat: 13.0338, lng: 80.2685 },
+  { label: 'Sholinganallur, Chennai', lat: 12.9010, lng: 80.2279 },
+  { label: 'OMR (Old Mahabalipuram Road), Chennai', lat: 12.9279, lng: 80.2337 },
+  { label: 'Perungudi, Chennai', lat: 12.9694, lng: 80.2451 },
+  { label: 'Madipakkam, Chennai', lat: 12.9602, lng: 80.2054 },
+  // Coimbatore Areas
+  { label: 'RS Puram, Coimbatore', lat: 11.0035, lng: 76.9568 },
+  { label: 'Gandhipuram, Coimbatore', lat: 11.0168, lng: 76.9774 },
+  { label: 'Saibaba Colony, Coimbatore', lat: 11.0239, lng: 76.9489 },
+  { label: 'Peelamedu, Coimbatore', lat: 11.0232, lng: 77.0310 },
+  { label: 'Singanallur, Coimbatore', lat: 10.9841, lng: 77.0301 },
+  // Madurai Areas
+  { label: 'Anna Nagar, Madurai', lat: 9.9252, lng: 78.1198 },
+  { label: 'KK Nagar, Madurai', lat: 9.9020, lng: 78.0910 },
+  { label: 'Bypass Road, Madurai', lat: 9.9619, lng: 78.1375 },
+  // Vellore Areas
+  { label: 'Katpadi, Vellore', lat: 12.9674, lng: 79.1454 },
+  { label: 'Sathuvachari, Vellore', lat: 12.9286, lng: 79.1477 },
+  // Trichy Areas
+  { label: 'Cantonment, Trichy', lat: 10.8050, lng: 78.6857 },
+  { label: 'Thillai Nagar, Trichy', lat: 10.7960, lng: 78.6897 },
+  // Salem Areas
+  { label: 'Four Roads, Salem', lat: 11.6666, lng: 78.1541 },
+  { label: 'Suramangalam, Salem', lat: 11.6816, lng: 78.0968 },
+  // Kanchipuram
+  { label: 'Kanchipuram Town', lat: 12.8342, lng: 79.7036 },
+  // Bangalore
+  { label: 'Jayanagar, Bangalore', lat: 12.9259, lng: 77.5933 },
+  { label: 'Indiranagar, Bangalore', lat: 12.9719, lng: 77.6412 },
+  { label: 'Koramangala, Bangalore', lat: 12.9352, lng: 77.6245 },
+  { label: 'Rajajinagar, Bangalore', lat: 13.0050, lng: 77.5545 },
+  { label: 'Whitefield, Bangalore', lat: 12.9698, lng: 77.7499 },
+  // Mysuru
+  { label: 'Mysuru City Centre', lat: 12.2958, lng: 76.6394 },
+  { label: 'Kuvempunagar, Mysuru', lat: 12.2896, lng: 76.6381 },
+];
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Filter, MapPin, Sparkles, Phone, Navigation,
@@ -38,6 +92,36 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
   const [rankedResults, setRankedResults] = useState<HospitalReferralScore[]>([]);
   const [isScoring, setIsScoring] = useState<boolean>(false);
   const [dispatchedReferral, setDispatchedReferral] = useState<any | null>(null);
+
+  // Location picker state
+  const [locationMode, setLocationMode] = useState<'preset' | 'gps' | 'manual'>('preset');
+  const [isGpsLoading, setIsGpsLoading] = useState<boolean>(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+
+  const handleUseGPS = () => {
+    setGpsError(null);
+    if (!navigator.geolocation) {
+      setGpsError('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = parseFloat(position.coords.latitude.toFixed(4));
+        const lng = parseFloat(position.coords.longitude.toFixed(4));
+        setOriginLat(lat);
+        setOriginLng(lng);
+        setOriginLabel(`My Location (${lat}, ${lng})`);
+        setLocationMode('gps');
+        setIsGpsLoading(false);
+      },
+      (err) => {
+        setGpsError('Unable to get your location. Please select from the list or enter manually. (' + err.message + ')');
+        setIsGpsLoading(false);
+      },
+      { timeout: 8000, enableHighAccuracy: true }
+    );
+  };
 
   const loadHospitals = async (silent = false) => {
     if (!silent) {
@@ -531,27 +615,112 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
             </div>
 
             <div className="form-group">
-              <label className="form-label">Patient Origin Location (GPS)</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  value={originLabel}
-                  onChange={(e) => setOriginLabel(e.target.value)}
-                  className="form-input"
-                  style={{ flex: 1 }}
-                />
+              <label className="form-label">
+                <MapPin size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                Patient Origin Location
+              </label>
+
+              {/* Quick-pick predefined locations */}
+              <select
+                value={originLabel}
+                onChange={(e) => {
+                  const selected = KNOWN_LOCATIONS.find(l => l.label === e.target.value);
+                  if (selected) {
+                    setOriginLat(selected.lat);
+                    setOriginLng(selected.lng);
+                    setOriginLabel(selected.label);
+                    setLocationMode('preset');
+                  }
+                }}
+                className="form-select"
+                style={{ marginBottom: '8px' }}
+              >
+                <option value="">— Select a known area / locality —</option>
+                {KNOWN_LOCATIONS.map(l => (
+                  <option key={l.label} value={l.label}>{l.label}</option>
+                ))}
+              </select>
+
+              {/* GPS / Manual toggle */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setOriginLat(13.0450);
-                    setOriginLng(80.2400);
-                    setOriginLabel('T. Nagar, Chennai');
-                  }}
+                  onClick={handleUseGPS}
+                  disabled={isGpsLoading}
                   className="btn btn-secondary btn-sm"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 >
-                  Reset GPS
+                  <Navigation size={14} />
+                  {isGpsLoading ? 'Detecting...' : 'Use My GPS Location'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocationMode(m => m === 'manual' ? 'preset' : 'manual')}
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
+                >
+                  <Filter size={13} />
+                  {locationMode === 'manual' ? 'Hide Manual' : 'Enter Manually'}
                 </button>
               </div>
+
+              {/* Manual lat/lng fields */}
+              {locationMode === 'manual' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>Latitude</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={originLat}
+                      onChange={(e) => {
+                        setOriginLat(parseFloat(e.target.value) || 0);
+                        setOriginLabel(`Custom (${e.target.value}, ${originLng})`);
+                        setLocationMode('manual');
+                      }}
+                      className="form-input"
+                      style={{ fontSize: '0.82rem' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>Longitude</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={originLng}
+                      onChange={(e) => {
+                        setOriginLng(parseFloat(e.target.value) || 0);
+                        setOriginLabel(`Custom (${originLat}, ${e.target.value})`);
+                        setLocationMode('manual');
+                      }}
+                      className="form-input"
+                      style={{ fontSize: '0.82rem' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* GPS error message */}
+              {gpsError && (
+                <div style={{ fontSize: '0.76rem', color: '#dc2626', background: '#fef2f2', padding: '6px 10px', borderRadius: '6px', marginBottom: '6px' }}>
+                  {gpsError}
+                </div>
+              )}
+
+              {/* Active location badge */}
+              {originLabel && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px',
+                  padding: '8px 12px', fontSize: '0.8rem', color: '#166534'
+                }}>
+                  <MapPin size={13} />
+                  <span><strong>From:</strong> {originLabel}</span>
+                  <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: '0.72rem', fontFamily: 'monospace' }}>
+                    {originLat.toFixed(4)}, {originLng.toFixed(4)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <button
