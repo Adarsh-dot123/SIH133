@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Building2, Sparkles, RefreshCw, Check, AlertCircle,
-  Activity, Users, ShieldAlert, Sliders, Database, ArrowRight
+  Activity, Users, ShieldAlert, Sliders, Database, ArrowRight,
+  Wifi, WifiOff, Clock, CheckCircle
 } from 'lucide-react';
 import { HospitalDetail, Bed, PatientStay, BedTurnoverPrediction } from '../types';
-import { api } from '../api/client';
+import { api, createWebSocketSubscriber } from '../api/client';
 import { PredictionBadge } from '../components/PredictionBadge';
 
 export const HospitalPortal: React.FC = () => {
@@ -14,6 +15,11 @@ export const HospitalPortal: React.FC = () => {
   const [selectedWard, setSelectedWard] = useState<string>('ALL');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isToggling, setIsToggling] = useState<boolean>(false);
+  const [isLiveSync, setIsLiveSync] = useState<boolean>(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [justRefreshed, setJustRefreshed] = useState<boolean>(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Inpatient Stays & ML Prediction state
   const [patientStays, setPatientStays] = useState<PatientStay[]>([]);
@@ -40,18 +46,59 @@ export const HospitalPortal: React.FC = () => {
     loadHospitalList();
   }, []);
 
+  const refreshCurrentHospital = async (silent = false) => {
+    if (!selectedHospitalId) return;
+    if (!silent) {
+      setIsRefreshing(true);
+      setIsLoading(true);
+    }
+    try {
+      await Promise.all([
+        loadHospitalDetail(selectedHospitalId, silent),
+        loadStays(selectedHospitalId)
+      ]);
+      setLastUpdated(new Date());
+      if (!silent) {
+        setJustRefreshed(true);
+        setTimeout(() => setJustRefreshed(false), 2000);
+      }
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedHospitalId) {
-      loadHospitalDetail(selectedHospitalId);
-      loadStays(selectedHospitalId);
+      refreshCurrentHospital(false);
     }
   }, [selectedHospitalId]);
+
+  // Real-time WebSocket sync & periodic polling across ALL portals
+  useEffect(() => {
+    // 1. WebSocket real-time subscription
+    const unsubscribe = createWebSocketSubscriber(() => {
+      refreshCurrentHospital(true);
+    });
+
+    // 2. 5-second dynamic polling
+    if (isLiveSync) {
+      pollingRef.current = setInterval(() => {
+        refreshCurrentHospital(true);
+      }, 5000);
+    }
+
+    return () => {
+      unsubscribe();
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [selectedHospitalId, isLiveSync]);
 
   const loadHospitalList = async () => {
     try {
       const data = await api.getHospitals();
       setHospitalsList(data);
-      if (data.length > 0) {
+      if (data.length > 0 && !selectedHospitalId) {
         setSelectedHospitalId(data[0].id);
       }
     } catch (err) {
@@ -59,8 +106,8 @@ export const HospitalPortal: React.FC = () => {
     }
   };
 
-  const loadHospitalDetail = async (hospId: number) => {
-    setIsLoading(true);
+  const loadHospitalDetail = async (hospId: number, silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const detail = await api.getHospitalDetail(hospId);
       setHospitalDetail(detail);
@@ -71,7 +118,7 @@ export const HospitalPortal: React.FC = () => {
     } catch (err) {
       console.error(err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -79,7 +126,7 @@ export const HospitalPortal: React.FC = () => {
     try {
       const stays = await api.getPatientStays(hospId);
       setPatientStays(stays);
-      if (stays.length > 0) {
+      if (stays.length > 0 && !selectedStay) {
         selectPatientForPrediction(stays[0]);
       }
     } catch (err) {
@@ -194,14 +241,57 @@ export const HospitalPortal: React.FC = () => {
           </p>
         </div>
 
-        {/* Hospital Dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Hospital Dropdown & Live Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {lastUpdated && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: '#94a3b8' }}>
+              <Clock size={13} />
+              <span>Updated {lastUpdated.toLocaleTimeString()}</span>
+            </div>
+          )}
+          <button
+            onClick={() => setIsLiveSync(s => !s)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
+              background: isLiveSync ? '#f0fdf4' : '#fef2f2',
+              color: isLiveSync ? '#16a34a' : '#dc2626',
+              fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer'
+            }}
+          >
+            {isLiveSync ? <Wifi size={13} /> : <WifiOff size={13} />}
+            {isLiveSync ? 'Live Sync Active (5s)' : 'Live Sync Paused'}
+          </button>
+          <button
+            onClick={() => refreshCurrentHospital(false)}
+            className="btn btn-secondary btn-sm"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: justRefreshed ? '#ecfdf5' : '#ffffff',
+              borderColor: justRefreshed ? '#10b981' : '#cbd5e1',
+              color: justRefreshed ? '#059669' : '#0f172a',
+              transition: 'all 0.2s ease'
+            }}
+            title="Refresh ward bed grid & resource feeds"
+          >
+            {justRefreshed ? (
+              <>
+                <CheckCircle size={14} style={{ color: '#10b981' }} />
+                <span>Wards Updated!</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw size={14} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+                <span>{isRefreshing ? 'Fetching...' : 'Refresh Wards'}</span>
+              </>
+            )}
+          </button>
           <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569' }}>Active Facility:</span>
           <select
             value={selectedHospitalId}
             onChange={(e) => setSelectedHospitalId(parseInt(e.target.value))}
             className="form-select"
-            style={{ fontWeight: 700, minWidth: '240px' }}
+            style={{ fontWeight: 700, minWidth: '220px' }}
           >
             {hospitalsList.map((h) => (
               <option key={h.id} value={h.id}>{h.name}</option>

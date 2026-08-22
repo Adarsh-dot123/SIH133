@@ -24,8 +24,14 @@ export const GovtCommandCenter: React.FC = () => {
   const [quantity, setQuantity] = useState<number>(50);
   const [reallocationSuccess, setReallocationSuccess] = useState<string | null>(null);
 
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [justRefreshed, setJustRefreshed] = useState<boolean>(false);
+
   const loadGovtData = async (silent = false) => {
-    if (!silent) setIsLoading(true);
+    if (!silent) {
+      setIsLoading(true);
+      setIsRefreshing(true);
+    }
     try {
       const [ov, al] = await Promise.all([
         api.getAdminOverview(),
@@ -34,6 +40,10 @@ export const GovtCommandCenter: React.FC = () => {
       setOverview(ov);
       setAlerts(al);
       setLastUpdated(new Date());
+      if (!silent) {
+        setJustRefreshed(true);
+        setTimeout(() => setJustRefreshed(false), 2000);
+      }
       if (ov.districts.length > 0) {
         setSelectedDistrict((prev) => {
           if (!prev) return ov.districts[0];
@@ -45,22 +55,18 @@ export const GovtCommandCenter: React.FC = () => {
       console.error('Failed to load Govt overview', err);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
-  // Real-time WebSocket sync & periodic polling
+  // Real-time WebSocket sync & periodic polling across ALL events
   useEffect(() => {
     loadGovtData();
 
-    // 1. WebSocket real-time subscription for immediate updates
+    // 1. WebSocket real-time subscription for immediate updates from ANY portal
     const unsubscribe = createWebSocketSubscriber((event) => {
-      if ([
-        'BED_STATUS_CHANGED', 'BED_OCCUPIED', 'BED_VACATED', 'BED_STATUS_TOGGLED',
-        'OXYGEN_LEVEL_UPDATED', 'BLOOD_LEVEL_UPDATED',
-        'IOT_TELEMETRY', 'DISTRICT_ALERT_TRIGGERED', 'RESOURCE_REALLOCATION_DISPATCHED'
-      ].includes(event)) {
-        loadGovtData(true);
-      }
+      // Refresh on ANY live state change event from any portal
+      loadGovtData(true);
     });
 
     // 2. 5-second dynamic polling
@@ -135,8 +141,29 @@ export const GovtCommandCenter: React.FC = () => {
             {isLiveSync ? <Wifi size={13} /> : <WifiOff size={13} />}
             {isLiveSync ? 'Live Sync Active (5s)' : 'Live Sync Paused'}
           </button>
-          <button onClick={() => loadGovtData(false)} className="btn btn-secondary btn-sm">
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} /> Refresh Feeds
+          <button
+            onClick={() => loadGovtData(false)}
+            className="btn btn-secondary btn-sm"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: justRefreshed ? '#ecfdf5' : '#ffffff',
+              borderColor: justRefreshed ? '#10b981' : '#cbd5e1',
+              color: justRefreshed ? '#059669' : '#0f172a',
+              transition: 'all 0.2s ease'
+            }}
+            title="Force fetch latest feeds from all hospital wards and districts"
+          >
+            {justRefreshed ? (
+              <>
+                <CheckCircle size={14} style={{ color: '#10b981' }} />
+                <span>Feeds Updated!</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw size={14} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+                <span>{isRefreshing ? 'Fetching...' : 'Refresh Feeds'}</span>
+              </>
+            )}
           </button>
           <button onClick={() => setIsReallocating(true)} className="btn btn-primary btn-sm">
             <Share2 size={14} /> Inter-District Reallocation

@@ -64,3 +64,10 @@ Thumbs.db
 *.swp
 *.swo
 *.log
+
+# Archives & Large Binary Tools
+*.zip
+*.tar.gz
+*.7z
+flutter_windows_*/
+

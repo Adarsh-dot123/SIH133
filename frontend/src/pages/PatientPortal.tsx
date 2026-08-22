@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Filter, MapPin, Sparkles, Phone, Navigation,
-  Shield, AlertTriangle, CheckCircle, ChevronRight, Activity, Ambulance
+  Shield, AlertTriangle, CheckCircle, ChevronRight, Activity, Ambulance,
+  RefreshCw, Wifi, WifiOff, Clock
 } from 'lucide-react';
 import { HospitalSummary, HospitalReferralScore } from '../types';
-import { api } from '../api/client';
+import { api, createWebSocketSubscriber } from '../api/client';
 import { PredictionBadge } from '../components/PredictionBadge';
 import { MapView } from '../components/MapView';
 
@@ -20,6 +21,11 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
   const [pmjayOnly, setPmjayOnly] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedHospital, setSelectedHospital] = useState<HospitalSummary | null>(null);
+  const [isLiveSync, setIsLiveSync] = useState<boolean>(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [justRefreshed, setJustRefreshed] = useState<boolean>(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Referral Request State
   const [patientName, setPatientName] = useState<string>('Ramesh Sundaram');
@@ -33,12 +39,11 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
   const [isScoring, setIsScoring] = useState<boolean>(false);
   const [dispatchedReferral, setDispatchedReferral] = useState<any | null>(null);
 
-  useEffect(() => {
-    loadHospitals();
-  }, [selectedSpecialty, pmjayOnly]);
-
-  const loadHospitals = async () => {
-    setIsLoading(true);
+  const loadHospitals = async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+      setIsRefreshing(true);
+    }
     try {
       const data = await api.getHospitals({
         specialty: selectedSpecialty || undefined,
@@ -46,6 +51,11 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
         search: searchQuery || undefined
       });
       setHospitals(data);
+      setLastUpdated(new Date());
+      if (!silent) {
+        setJustRefreshed(true);
+        setTimeout(() => setJustRefreshed(false), 2000);
+      }
       if (data.length > 0 && !selectedHospital) {
         setSelectedHospital(data[0]);
       }
@@ -53,8 +63,33 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
       console.error('Failed to load hospitals', err);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    loadHospitals();
+  }, [selectedSpecialty, pmjayOnly]);
+
+  // Real-time WebSocket sync & periodic polling across ALL portals
+  useEffect(() => {
+    // 1. WebSocket real-time subscription
+    const unsubscribe = createWebSocketSubscriber(() => {
+      loadHospitals(true);
+    });
+
+    // 2. 5-second dynamic polling
+    if (isLiveSync) {
+      pollingRef.current = setInterval(() => {
+        loadHospitals(true);
+      }, 5000);
+    }
+
+    return () => {
+      unsubscribe();
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [isLiveSync, selectedSpecialty, pmjayOnly, searchQuery]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,7 +171,52 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {lastUpdated && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.8)' }}>
+              <Clock size={13} />
+              <span>Updated {lastUpdated.toLocaleTimeString()}</span>
+            </div>
+          )}
+          <button
+            onClick={() => setIsLiveSync(s => !s)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.2)',
+              background: isLiveSync ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+              color: '#ffffff',
+              fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
+              backdropFilter: 'blur(6px)'
+            }}
+          >
+            {isLiveSync ? <Wifi size={13} /> : <WifiOff size={13} />}
+            {isLiveSync ? 'Live Sync Active (5s)' : 'Live Sync Paused'}
+          </button>
+          <button
+            onClick={() => loadHospitals(false)}
+            className="btn btn-secondary"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: justRefreshed ? '#ecfdf5' : 'rgba(255, 255, 255, 0.95)',
+              borderColor: justRefreshed ? '#10b981' : '#ffffff',
+              color: justRefreshed ? '#059669' : '#0f172a',
+              padding: '10px 14px',
+              transition: 'all 0.2s ease'
+            }}
+            title="Fetch latest hospital bed availability"
+          >
+            {justRefreshed ? (
+              <>
+                <CheckCircle size={14} style={{ color: '#10b981' }} />
+                <span>Hospitals Updated!</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw size={14} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+                <span>{isRefreshing ? 'Fetching...' : 'Refresh'}</span>
+              </>
+            )}
+          </button>
           <button
             onClick={() => setActiveSubTab('search')}
             className={`btn ${activeSubTab === 'search' ? 'btn-primary' : 'btn-secondary'}`}
