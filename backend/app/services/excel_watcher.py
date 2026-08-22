@@ -333,6 +333,7 @@ def update_google_sheet_cell(hospital_id: int, med_id: str, value: int):
         print(f"❌ Error updating Google Sheet cell: {e}")
 
 async def tick_sqlite_medicine_timers():
+    global FIRESTORE_DISABLED
     tick_count = 0
     while True:
         await asyncio.sleep(1)
@@ -344,15 +345,18 @@ async def tick_sqlite_medicine_timers():
             for mi in items_restocking:
                 if mi.restock_eta > 1:
                     mi.restock_eta -= 1
-                    try:
-                        fs = init_firebase_admin()
-                        if fs:
-                            doc_id = f"{mi.hospital_id}_{mi.med_id}"
-                            fs.collection("medicines").document(doc_id).set({
-                                "restockEta": mi.restock_eta
-                            }, merge=True)
-                    except Exception as fs_err:
-                        print(f"❌ Error updating Firestore restock ETA: {fs_err}")
+                    if not FIRESTORE_DISABLED:
+                        try:
+                            fs = init_firebase_admin()
+                            if fs:
+                                doc_id = f"{mi.hospital_id}_{mi.med_id}"
+                                fs.collection("medicines").document(doc_id).set({
+                                    "restockEta": mi.restock_eta
+                                }, merge=True)
+                        except Exception as fs_err:
+                            if "429" in str(fs_err) or "Quota" in str(fs_err) or "Timeout" in str(fs_err):
+                                FIRESTORE_DISABLED = True
+                            print(f"❌ Error updating Firestore restock ETA: {fs_err}")
                 else:
                     mi.is_restocking = False
                     mi.restock_eta = 0
@@ -360,20 +364,23 @@ async def tick_sqlite_medicine_timers():
                     mi.stock_level = 95.0
                     
                     # Update Firestore
-                    try:
-                        fs = init_firebase_admin()
-                        if fs:
-                            doc_id = f"{mi.hospital_id}_{mi.med_id}"
-                            fs.collection("medicines").document(doc_id).set({
-                                "stockLevel": 95,
-                                "stock_level": 95,
-                                "isRestocking": False,
-                                "restockEta": 0,
-                                "vehicle": ""
-                            }, merge=True)
-                            print(f"✅ Delivery complete for {mi.medicine_name} at facility {mi.hospital_id}")
-                    except Exception as fs_err:
-                        print(f"❌ Error updating Firestore restock completion: {fs_err}")
+                    if not FIRESTORE_DISABLED:
+                        try:
+                            fs = init_firebase_admin()
+                            if fs:
+                                doc_id = f"{mi.hospital_id}_{mi.med_id}"
+                                fs.collection("medicines").document(doc_id).set({
+                                    "stockLevel": 95,
+                                    "stock_level": 95,
+                                    "isRestocking": False,
+                                    "restockEta": 0,
+                                    "vehicle": ""
+                                }, merge=True)
+                                print(f"✅ Delivery complete for {mi.medicine_name} at facility {mi.hospital_id}")
+                        except Exception as fs_err:
+                            if "429" in str(fs_err) or "Quota" in str(fs_err) or "Timeout" in str(fs_err):
+                                FIRESTORE_DISABLED = True
+                            print(f"❌ Error updating Firestore restock completion: {fs_err}")
 
                     # Write back to Google Sheets!
                     update_google_sheet_cell(mi.hospital_id, mi.med_id, 95)
