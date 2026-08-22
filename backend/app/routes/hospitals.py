@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Hospital, Bed, OxygenInventory, BloodInventory, District, PatientStay
+from app.models import Hospital, Bed, OxygenInventory, BloodInventory, District, PatientStay, MedicineInventory
 from app.schemas import HospitalSummary, HospitalDetailResponse, OxygenUpdateRequest, BloodUpdateRequest
 from app.services.ml_engine import ml_engine
 from app.services.audit_service import audit_service
