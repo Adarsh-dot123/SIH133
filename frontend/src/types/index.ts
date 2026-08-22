@@ -1,12 +1,15 @@
 export type UserRole = 'PATIENT' | 'HOSPITAL_STAFF' | 'GOVT_ADMIN';
 
 export interface User {
-  id: number;
+  id: number | string;
   email: string;
   full_name: string;
   role: UserRole;
   hospital_id?: number | null;
   phone?: string | null;
+  department?: string | null;
+  designation?: string | null;
+  abha_id?: string | null;
 }
 
 export interface HospitalSummary {
@@ -36,6 +39,7 @@ export interface HospitalSummary {
   oxygen_beds_total: number;
   oxygen_status: 'ADEQUATE' | 'WARNING' | 'CRITICAL';
   status: 'NORMAL' | 'WARNING' | 'CRITICAL';
+  doctors_on_duty?: number;
   
   predicted_available_12h: number;
   predicted_available_24h: number;
