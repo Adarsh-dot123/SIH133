@@ -2,7 +2,7 @@ import React from 'react';
 import { UserRole, User as UserType } from '../types';
 import { 
   Activity, ShieldCheck, PhoneCall, Building2, User, Landmark, 
-  Cpu, Link2, Sparkles, Radio, LogIn, LogOut, Lock, Users, Globe
+  Cpu, Link2, Sparkles, Radio, LogIn, LogOut, Lock, Users, Globe, Layers
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
