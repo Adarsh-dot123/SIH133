@@ -18,15 +18,15 @@ import {
 } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mock-medflow",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyFakeKeyForLocalDevMedFlow",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "medflow-fb6a8.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "medflow-fb6a8",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "medflow-fb6a8.appspot.com",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
 };
 
-const isMock = !import.meta.env.VITE_FIREBASE_API_KEY;
+const isMock = false;
 
 // Initialize Firebase
 let app: any;

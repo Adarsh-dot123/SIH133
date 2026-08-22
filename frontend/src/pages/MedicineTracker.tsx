@@ -53,7 +53,7 @@ export const MedicineTracker: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. Local active clock for simulating burn rates and restocking countdowns remotely
+  // 2. Local active clock for simulating restocking countdowns remotely
   useEffect(() => {
     const timer = setInterval(() => {
       medicines.forEach((med) => {
@@ -68,13 +68,6 @@ export const MedicineTracker: React.FC = () => {
             });
           } else {
             updateFirestoreDoc('medicines', med.id, { restockEta: nextEta });
-          }
-        } else if (!med.isRestocking) {
-          const nextStock = Math.max(0, med.stockLevel - (med.burnRate * 0.05));
-          const rounded = Math.round(nextStock * 10) / 10;
-          
-          if (rounded !== med.stockLevel) {
-            updateFirestoreDoc('medicines', med.id, { stockLevel: rounded });
           }
         }
       });
