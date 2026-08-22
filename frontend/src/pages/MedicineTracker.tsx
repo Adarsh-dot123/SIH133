@@ -6,11 +6,11 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { subscribeCollection, updateFirestoreDoc } from '../firebase';
 
-import { fetchLiveMedicines, MedicineStock } from '../services/medicineService';
+import { fetchLiveMedicines, MedicineStock, DEFAULT_MEDICINES } from '../services/medicineService';
 
 export const MedicineTracker: React.FC = () => {
   const { t } = useLanguage();
-  const [medicines, setMedicines] = useState<MedicineStock[]>([]);
+  const [medicines, setMedicines] = useState<MedicineStock[]>(DEFAULT_MEDICINES);
   const [selectedFacility, setSelectedFacility] = useState<string>('ALL');
 
   const loadMedicines = async () => {

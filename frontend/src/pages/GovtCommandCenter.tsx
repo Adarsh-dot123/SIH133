@@ -7,7 +7,7 @@ import {
 import { GovtCommandOverview, DistrictAlert, DistrictOverviewItem } from '../types';
 import { api, createWebSocketSubscriber } from '../api/client';
 import { subscribeCollection, updateFirestoreDoc } from '../firebase';
-import { fetchLiveMedicines, MedicineStock } from '../services/medicineService';
+import { fetchLiveMedicines, MedicineStock, DEFAULT_MEDICINES } from '../services/medicineService';
 
 export const GovtCommandCenter: React.FC = () => {
   const [overview, setOverview] = useState<GovtCommandOverview | null>(null);
@@ -19,7 +19,7 @@ export const GovtCommandCenter: React.FC = () => {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Medicine supply states
-  const [medicines, setMedicines] = useState<MedicineStock[]>([]);
+  const [medicines, setMedicines] = useState<MedicineStock[]>(DEFAULT_MEDICINES);
 
   // Load medicines from Google Sheet / Backend SQLite
   const loadMedicines = async () => {
