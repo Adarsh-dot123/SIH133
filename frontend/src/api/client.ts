@@ -34,16 +34,26 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      try {
-        const errJson = JSON.parse(errText);
-        throw new Error(errJson.detail || 'API request failed');
-      } catch (e: any) {
-        throw new Error(e.message || `HTTP ${response.status}`);
+      const errText = await response.text().catch(() => '');
+      let errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+      if (errText) {
+        try {
+          const errJson = JSON.parse(errText);
+          errorMsg = errJson.detail || errText;
+        } catch {
+          errorMsg = errText;
+        }
       }
+      throw new Error(errorMsg);
     }
 
-    return response.json();
+    const resText = await response.text().catch(() => '');
+    if (!resText) return {} as T;
+    try {
+      return JSON.parse(resText) as T;
+    } catch {
+      return {} as T;
+    }
   }
 
   // Auth
