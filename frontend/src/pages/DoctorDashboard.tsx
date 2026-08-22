@@ -1,74 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { Stethoscope, Phone, Clock, CheckCircle, RefreshCw, User2, Activity } from 'lucide-react';
-
-interface Complaint {
-  id: number;
-  patient_id: number;
-  patient_name: string;
-  title: string;
-  description: string;
-  specialization_needed: string;
-  patient_peer_id?: string;
-  status: string;
-  created_at: string;
-}
+import { subscribeToComplaints, updateComplaintState, PatientComplaintItem } from '../services/complaintsService';
 
 interface DoctorDashboardProps {
   doctorName: string;
   specialization: string;
   token?: string;
   myPeerId: string | null;
-  onCallPatient: (complaint: Complaint) => void;
+  onCallPatient: (complaint: PatientComplaintItem) => void;
 }
 
-const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
-
 export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
-  doctorName, specialization, token, myPeerId, onCallPatient
+  doctorName, specialization, myPeerId, onCallPatient
 }) => {
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [complaints, setComplaints] = useState<PatientComplaintItem[]>([]);
   const [isAvailable, setIsAvailable] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const loadComplaints = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API}/api/complaints?specialization=${encodeURIComponent(specialization)}&status=OPEN`, { headers });
-      if (res.ok) setComplaints(await res.json());
-    } catch { /* ignore */ } finally { setLoading(false); }
-  };
-
   useEffect(() => {
-    loadComplaints();
-    const iv = setInterval(loadComplaints, 5000);
-    return () => clearInterval(iv);
+    setLoading(true);
+    const unsub = subscribeToComplaints(specialization, (list) => {
+      setComplaints(list);
+      setLoading(false);
+    });
+    return unsub;
   }, [specialization]);
 
-  const handleCall = async (complaint: Complaint) => {
+  const handleCall = async (complaint: PatientComplaintItem) => {
     if (!myPeerId) {
-      alert('Connecting to video call server... please try again in a few seconds.');
+      alert('Connecting to video call server... please try again in a moment.');
       return;
     }
-    await fetch(`${API}/api/complaints/${complaint.id}/status`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ status: 'IN_CALL' })
-    });
+    await updateComplaintState(complaint.id, 'IN_CALL', doctorName);
     onCallPatient(complaint);
   };
 
-  const handleResolve = async (complaintId: number) => {
-    await fetch(`${API}/api/complaints/${complaintId}/status`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ status: 'RESOLVED' })
-    });
-    loadComplaints();
+  const handleResolve = async (complaintId: number | string) => {
+    await updateComplaintState(complaintId, 'RESOLVED');
   };
 
   const openCount = complaints.filter(c => c.status === 'OPEN').length;
@@ -84,12 +52,12 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0 }}>{doctorName}</h2>
             </div>
             <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Specialization: <strong>{specialization}</strong></div>
-            <div style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '4px' }}>Peer ID: {myPeerId ? myPeerId : 'Connecting...'}</div>
+            <div style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '4px' }}>Peer ID: {myPeerId ? myPeerId : 'Connecting to ICR...'}</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
             <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '12px', padding: '8px 16px', textAlign: 'center' }}>
               <div style={{ fontSize: '2rem', fontWeight: 900, lineHeight: 1 }}>{openCount}</div>
-              <div style={{ fontSize: '0.72rem', opacity: 0.8 }}>Open Complaints</div>
+              <div style={{ fontSize: '0.72rem', opacity: 0.8 }}>Waiting Patients</div>
             </div>
             <button
               onClick={() => setIsAvailable(a => !a)}
@@ -106,18 +74,18 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Activity size={18} style={{ color: '#0d9488' }} />
-            Patient Consultation Queue — {specialization}
+            Live Consultation Queue — {specialization}
           </h3>
-          <button onClick={loadComplaints} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '4px 10px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <RefreshCw size={12} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Refresh
-          </button>
+          <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <RefreshCw size={12} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Live Synced
+          </div>
         </div>
 
         {complaints.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', background: '#f8fafc', borderRadius: '12px', color: '#64748b' }}>
             <CheckCircle size={32} style={{ margin: '0 auto 8px', color: '#0d9488' }} />
-            <div style={{ fontWeight: 700 }}>No pending patient complaints right now</div>
-            <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>Auto-refreshing live queue every 5 seconds...</div>
+            <div style={{ fontWeight: 700 }}>No open complaints in {specialization} queue</div>
+            <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>Patients submitting symptoms will appear here instantly.</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -127,21 +95,21 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                       <User2 size={14} style={{ color: '#64748b' }} />
-                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0d9488' }}>{c.patient_name}</span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0d9488' }}>{c.patient_name}</span>
                     </div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>{c.title}</div>
-                    {c.description && <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px', lineHeight: 1.4 }}>{c.description}</div>}
+                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>{c.title}</div>
+                    {c.description && <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '4px', lineHeight: 1.4 }}>{c.description}</div>}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap' }}>
-                    <Clock size={11} />{new Date(c.created_at).toLocaleTimeString('en-IN')}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap' }}>
+                    <Clock size={12} />{new Date(c.created_at).toLocaleTimeString('en-IN')}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                   {c.status === 'OPEN' && (
                     <button
                       onClick={() => handleCall(c)}
                       className="btn btn-primary btn-sm"
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px', fontWeight: 700 }}
                     >
                       <Phone size={14} /> 📹 Call Patient
                     </button>
@@ -150,7 +118,7 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
                     <button
                       onClick={() => handleResolve(c.id)}
                       className="btn btn-secondary btn-sm"
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px' }}
                     >
                       <CheckCircle size={14} /> Mark Resolved
                     </button>

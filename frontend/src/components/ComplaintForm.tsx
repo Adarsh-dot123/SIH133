@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MessageSquare, Send, Clock, CheckCircle, AlertCircle, Phone } from 'lucide-react';
-
-interface Complaint {
-  id: number;
-  title: string;
-  description: string;
-  specialization_needed: string;
-  status: string;
-  created_at: string;
-}
+import { submitNewComplaint, subscribeToComplaints, PatientComplaintItem } from '../services/complaintsService';
 
 interface ComplaintFormProps {
   patientId: number;
@@ -34,37 +26,24 @@ function detectSpecialty(text: string): string {
   return 'General Medicine';
 }
 
-const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
-
-export const ComplaintForm: React.FC<ComplaintFormProps> = ({ token, myPeerId }) => {
+export const ComplaintForm: React.FC<ComplaintFormProps> = ({ patientName, myPeerId }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [detectedSpec, setDetectedSpec] = useState('General Medicine');
   const [submitting, setSubmitting] = useState(false);
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [complaints, setComplaints] = useState<PatientComplaintItem[]>([]);
   const [successMsg, setSuccessMsg] = useState('');
   const [error, setError] = useState('');
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
   useEffect(() => {
     setDetectedSpec(detectSpecialty(title + ' ' + description));
   }, [title, description]);
 
-  const loadComplaints = async () => {
-    try {
-      const res = await fetch(`${API}/api/complaints`, { headers });
-      if (res.ok) setComplaints(await res.json());
-    } catch { /* ignore */ }
-  };
-
   useEffect(() => {
-    loadComplaints();
-    const iv = setInterval(loadComplaints, 5000);
-    return () => clearInterval(iv);
+    const unsub = subscribeToComplaints(null, (list) => {
+      setComplaints(list);
+    });
+    return unsub;
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,40 +53,21 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ token, myPeerId })
     const spec = detectedSpec;
     
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-      const res = await fetch(`${API}/api/complaints`, {
-        method: 'POST',
-        headers,
-        signal: controller.signal,
-        body: JSON.stringify({ title, description, patient_peer_id: myPeerId })
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        setSuccessMsg(`Complaint submitted! Matched to ${data.specialization_needed || spec} specialist. A doctor will call you shortly.`);
-      } else {
-        throw new Error('API offline');
-      }
-    } catch {
-      // Local fallback for static / demo environments
-      const localComplaint: Complaint = {
-        id: Date.now(),
+      await submitNewComplaint({
+        patient_name: patientName || 'Patient',
         title,
         description,
         specialization_needed: spec,
-        status: 'OPEN',
-        created_at: new Date().toISOString()
-      };
-      setComplaints(prev => [localComplaint, ...prev]);
+        patient_peer_id: myPeerId || undefined,
+      });
+
       setSuccessMsg(`Complaint submitted! Matched to ${spec} specialist. A doctor will call you shortly.`);
-    } finally {
       setTitle('');
       setDescription('');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to submit complaint.');
+    } finally {
       setSubmitting(false);
-      loadComplaints();
     }
   };
 
@@ -180,6 +140,9 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ token, myPeerId })
                 <div>
                   <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0f172a' }}>{c.title}</div>
                   <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>{c.specialization_needed} • {new Date(c.created_at).toLocaleString('en-IN')}</div>
+                  {c.assigned_doctor_name && (
+                    <div style={{ fontSize: '0.72rem', color: '#0d9488', marginTop: '2px', fontWeight: 600 }}>Attending: {c.assigned_doctor_name}</div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', fontWeight: 700, color: statusColor(c.status), background: '#ffffff', padding: '3px 8px', borderRadius: '9999px', border: `1px solid ${statusColor(c.status)}30` }}>
                   {statusIcon(c.status)}

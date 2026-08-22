@@ -3,7 +3,7 @@ import { useRef, useState, useCallback } from 'react';
 export interface CallInfo {
   peerId: string;
   doctorName: string;
-  complaintId: number;
+  complaintId: number | string;
 }
 
 export interface UsePeerCallReturn {
@@ -14,7 +14,7 @@ export interface UsePeerCallReturn {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   initPeer: (userId: string) => void;
-  callPeer: (remotePeerId: string, complaintId: number) => void;
+  callPeer: (remotePeerId: string, complaintId: number | string) => void;
   answerCall: () => void;
   endCall: () => void;
 }
@@ -86,7 +86,7 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
     });
   }, [onIncomingCall]);
 
-  const callPeer = useCallback(async (remotePeerId: string, complaintId: number) => {
+  const callPeer = useCallback(async (remotePeerId: string, complaintId: number | string) => {
     if (!peerRef.current) return;
     const stream = await getMedia();
     if (!stream) { alert('Camera/mic access required for video call.'); return; }
