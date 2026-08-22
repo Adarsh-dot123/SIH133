@@ -81,6 +81,14 @@ def update_beds_status(db_sql: Session, hospital_id: int, bed_type: str, request
         else:
             bed.status = "OCCUPIED"
 
+def safe_int(val, default=0) -> int:
+    try:
+        if pd.isna(val) or str(val).strip().lower() in ("nan", "", "none"):
+            return default
+        return int(float(val))
+    except Exception:
+        return default
+
 def sync_dataframe_to_databases(df: pd.DataFrame):
     blood_groups_map = {
         "blood_a_pos": "A+",
@@ -106,15 +114,9 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
     # 1. Sync to SQL Database (SQLite)
     db_sql = SessionLocal()
     try:
-        for _, row in df.iterrows():
-            # Skip empty or NaN IDs
+        for idx, row in df.iterrows():
             raw_id = row.get("id")
-            if pd.isna(raw_id) or str(raw_id).strip().lower() in ("nan", ""):
-                continue
-            try:
-                hosp_id = int(float(raw_id))
-            except Exception:
-                continue
+            hosp_id = safe_int(raw_id, default=idx + 1)
 
             hosp = db_sql.query(Hospital).filter(Hospital.id == hosp_id).first()
             if hosp:
@@ -122,36 +124,38 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                 if "name" in row and pd.notna(row["name"]):
                     hosp.name = str(row["name"])
 
-                # Update each type of bed
-                update_beds_status(db_sql, hosp_id, "GENERAL", int(row.get("general_beds_available", 0)), int(row.get("general_beds_total", 0)))
-                update_beds_status(db_sql, hosp_id, "ICU", int(row.get("icu_beds_available", 0)), int(row.get("icu_beds_total", 0)))
-                update_beds_status(db_sql, hosp_id, "VENTILATOR", int(row.get("ventilators_available", 0)), int(row.get("ventilators_total", 0)))
-                update_beds_status(db_sql, hosp_id, "OXYGEN_SUPPORTED", int(row.get("oxygen_beds_available", 0)), int(row.get("oxygen_beds_total", 0)))
+                # Update each type of bed safely
+                update_beds_status(db_sql, hosp_id, "GENERAL", safe_int(row.get("general_beds_available")), safe_int(row.get("general_beds_total")))
+                update_beds_status(db_sql, hosp_id, "ICU", safe_int(row.get("icu_beds_available")), safe_int(row.get("icu_beds_total")))
+                update_beds_status(db_sql, hosp_id, "VENTILATOR", safe_int(row.get("ventilators_available")), safe_int(row.get("ventilators_total")))
+                update_beds_status(db_sql, hosp_id, "OXYGEN_SUPPORTED", safe_int(row.get("oxygen_beds_available")), safe_int(row.get("oxygen_beds_total")))
 
-                # Update blood availability (only if columns exist in Google Sheet)
+                # Update blood availability
                 for col_name, blood_grp in blood_groups_map.items():
                     if col_name in row:
                         val = row.get(col_name)
                         if pd.notna(val):
+                            units = safe_int(val)
                             bi = db_sql.query(BloodInventory).filter(
                                 BloodInventory.hospital_id == hosp_id,
                                 BloodInventory.blood_group == blood_grp
                             ).first()
                             if bi:
-                                bi.units_available = int(val)
+                                bi.units_available = units
                             else:
                                 bi = BloodInventory(
                                     hospital_id=hosp_id,
                                     blood_group=blood_grp,
-                                    units_available=int(val),
+                                    units_available=units,
                                     units_critical_threshold=5
                                 )
                                 db_sql.add(bi)
 
-                # Update medicine stock level in SQLite (only if columns exist in Google Sheet)
+                # Update medicine stock level in SQLite
                 for col_name, info in med_columns_map.items():
-                    if col_name in row and pd.notna(row[col_name]):
-                        med_stock_val = int(float(row[col_name]))
+                    if col_name in row:
+                        val = row.get(col_name)
+                        med_stock_val = safe_int(val, default=0)
                         doc_id = f"{hosp_id}_{info['med_id']}"
                         mi = db_sql.query(MedicineInventory).filter(MedicineInventory.id == doc_id).first()
                         if mi:
@@ -169,78 +173,54 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                             )
                             db_sql.add(mi)
         db_sql.commit()
-        print("✅ SQLite database synchronized successfully.")
+        print("✅ SQLite database synchronized successfully from Google Sheet.")
     except Exception as e:
         db_sql.rollback()
         logger.error(f"❌ SQLite database sync failed: {e}")
     finally:
         db_sql.close()
 
-    # 2. Sync to Firestore (with circuit breaker to prevent server hangs on 429 quota errors)
-    global FIRESTORE_DISABLED
-    if FIRESTORE_DISABLED:
-        return
-
+    # 2. Sync to Firestore
     try:
         fs = init_firebase_admin()
         if fs:
-            for _, row in df.iterrows():
+            for idx, row in df.iterrows():
                 raw_id = row.get("id")
-                if pd.isna(raw_id) or str(raw_id).strip().lower() in ("nan", ""):
-                    continue
-                try:
-                    hosp_id_int = int(float(raw_id))
-                    hosp_id = str(hosp_id_int)
-                except Exception:
-                    continue
+                hosp_id_int = safe_int(raw_id, default=idx + 1)
+                hosp_id = str(hosp_id_int)
 
                 doc_ref = fs.collection("hospitals").document(hosp_id)
                 
-                # Construct the blood inventory list matching standard schemas (if columns exist)
                 blood_inv_list = []
-                has_blood_cols = any(col_name in row for col_name in blood_groups_map)
-                
-                if has_blood_cols:
-                    for col_name, blood_grp in blood_groups_map.items():
-                        if col_name in row:
-                            val = row.get(col_name)
-                            if pd.notna(val):
-                                blood_inv_list.append({
-                                    "blood_group": blood_grp,
-                                    "units_available": int(val)
-                                })
+                for col_name, blood_grp in blood_groups_map.items():
+                    if col_name in row and pd.notna(row.get(col_name)):
+                        blood_inv_list.append({
+                            "blood_group": blood_grp,
+                            "units_available": safe_int(row.get(col_name))
+                        })
 
                 firestore_payload = {
                     "id": hosp_id,
-                    "name": str(row["name"]),
-                    "general_beds_available": int(row.get("general_beds_available", 0)),
-                    "general_beds_total": int(row.get("general_beds_total", 0)),
-                    "icu_beds_available": int(row.get("icu_beds_available", 0)),
-                    "icu_beds_total": int(row.get("icu_beds_total", 0)),
-                    "ventilators_available": int(row.get("ventilators_available", 0)),
-                    "ventilators_total": int(row.get("ventilators_total", 0)),
-                    "oxygen_beds_available": int(row.get("oxygen_beds_available", 0)),
-                    "oxygen_beds_total": int(row.get("oxygen_beds_total", 0)),
-                    "doctors_on_duty": int(row.get("doctors_on_duty", 0))
+                    "name": str(row.get("name", f"Hospital {hosp_id}")),
+                    "general_beds_available": safe_int(row.get("general_beds_available")),
+                    "general_beds_total": safe_int(row.get("general_beds_total")),
+                    "icu_beds_available": safe_int(row.get("icu_beds_available")),
+                    "icu_beds_total": safe_int(row.get("icu_beds_total")),
+                    "ventilators_available": safe_int(row.get("ventilators_available")),
+                    "ventilators_total": safe_int(row.get("ventilators_total")),
+                    "oxygen_beds_available": safe_int(row.get("oxygen_beds_available")),
+                    "oxygen_beds_total": safe_int(row.get("oxygen_beds_total")),
+                    "doctors_on_duty": safe_int(row.get("doctors_on_duty"))
                 }
-                if has_blood_cols:
+                if blood_inv_list:
                     firestore_payload["blood_inventory"] = blood_inv_list
 
                 doc_ref.set(firestore_payload, merge=True)
 
-                med_columns_map = {
-                    "med_antivenom": {"name": "Snake Antivenom", "category": "Lifesaving Venom Immunoglobulin", "minThreshold": 30, "med_id": "1", "burnRate": 1.8},
-                    "med_rabies": {"name": "Anti-Rabies Vaccine", "category": "Viral Prophylaxis", "minThreshold": 25, "med_id": "2", "burnRate": 2.2},
-                    "med_oxytocin": {"name": "Oxytocin Injection", "category": "Maternal Care / Hemorrhage prevention", "minThreshold": 20, "med_id": "3", "burnRate": 3.5},
-                    "med_insulin": {"name": "Insulin (Human Mix)", "category": "Chronic Care / Endocrinology", "minThreshold": 25, "med_id": "4", "burnRate": 1.5},
-                    "med_iv": {"name": "IV Fluids (Normal Saline)", "category": "Critical Care / Rehydration", "minThreshold": 35, "med_id": "5", "burnRate": 6.0},
-                    "med_metformin": {"name": "Metformin 500mg", "category": "Essential Oral Anti-diabetic", "minThreshold": 20, "med_id": "6", "burnRate": 4.2},
-                    "med_paracetamol": {"name": "Paracetamol 650mg", "category": "Basic Analgesic & Antipyretic", "minThreshold": 30, "med_id": "7", "burnRate": 12.0}
-                }
-
                 for col_name, info in med_columns_map.items():
-                    if col_name in row and pd.notna(row[col_name]):
-                        med_stock_val = int(float(row[col_name]))
+                    if col_name in row:
+                        val = row.get(col_name)
+                        med_stock_val = safe_int(val, default=0)
                         doc_id = f"{hosp_id_int}_{info['med_id']}"
                         med_doc_ref = fs.collection("medicines").document(doc_id)
                         
@@ -253,14 +233,12 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                             "stockLevel": med_stock_val,
                             "stock_level": med_stock_val,
                             "minThreshold": info["minThreshold"],
-                            "facility": str(row["name"]),
+                            "facility": str(row.get("name", f"Hospital {hosp_id_int}")),
                             "lastUpdated": datetime.datetime.utcnow().isoformat()
                         }, merge=True)
-            print("✅ Firestore database synchronized successfully.")
+            print("✅ Firestore database synchronized successfully with live Google Sheet.")
     except Exception as fe:
-        if "Quota" in str(fe) or "429" in str(fe) or "Timeout" in str(fe) or "ResourceExhausted" in str(fe):
-            FIRESTORE_DISABLED = True
-            logger.warning("⚠️ Firestore quota limit reached. Paused background Firestore network retries. Local SQLite & direct website sync active.")
+        print(f"⚠️ Firestore sync notice: {fe}")
 
 def extract_spreadsheet_id(url: str) -> str:
     import re
