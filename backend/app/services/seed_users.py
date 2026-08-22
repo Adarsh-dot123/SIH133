@@ -26,7 +26,7 @@ SEED_USERS = [
         "department": "Cardiology",
         "designation": "Senior Cardiologist",
         "phone": "+91-9000000002",
-        "doctor_profile": {"specialization": "Cardiology", "hospital_name": "Apollo Hospitals, Greams Road"}
+        "doctor_profile": {"specialization": "Cardiology", "hospital_name": "Apol Hospitals"}
     },
     {
         "email": "dr.priya@fortis.in",
@@ -37,7 +37,7 @@ SEED_USERS = [
         "department": "Pediatrics",
         "designation": "Senior Pediatrician",
         "phone": "+91-9000000003",
-        "doctor_profile": {"specialization": "Pediatrics", "hospital_name": "Fortis Malar Hospital, Adyar"}
+        "doctor_profile": {"specialization": "Pediatrics", "hospital_name": "Sunfeast Hospitals"}
     },
     {
         "email": "dr.rajan@kamaraj.in",
@@ -48,7 +48,7 @@ SEED_USERS = [
         "department": "Neurology",
         "designation": "Senior Neurologist",
         "phone": "+91-9000000004",
-        "doctor_profile": {"specialization": "Neurology", "hospital_name": "MIOT International"}
+        "doctor_profile": {"specialization": "Neurology", "hospital_name": "Kamaraj Hospitals"}
     },
     {
         "email": "dr.meena@nehru.in",
@@ -59,7 +59,7 @@ SEED_USERS = [
         "department": "Pulmonology",
         "designation": "Senior Pulmonologist",
         "phone": "+91-9000000005",
-        "doctor_profile": {"specialization": "Pulmonology", "hospital_name": "Kauvery Hospital, Alwarpet"}
+        "doctor_profile": {"specialization": "Pulmonology", "hospital_name": "Nehru Hospitals"}
     },
     {
         "email": "dr.vikram@gandhi.in",
@@ -70,7 +70,7 @@ SEED_USERS = [
         "department": "Nephrology",
         "designation": "Senior Nephrologist",
         "phone": "+91-9000000006",
-        "doctor_profile": {"specialization": "Nephrology", "hospital_name": "Rajiv Gandhi Government General Hospital (RGGGH)"}
+        "doctor_profile": {"specialization": "Nephrology", "hospital_name": "Gandhi Hospitals"}
     },
     # Patients
     {

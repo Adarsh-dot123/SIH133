@@ -100,7 +100,7 @@ def seed_database(force_reseed: bool = False):
         print("Seeding Hospitals...")
         hospitals_data = [
             {
-                "name": "Apollo Hospitals, Greams Road",
+                "name": "Apol Hospitals",
                 "district": "Chennai",
                 "address": "21 Greams Lane, Thousand Lights, Chennai, TN 600006",
                 "lat": 13.0569, "lng": 80.2525,
@@ -110,7 +110,7 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 22.0, "o2_curr": 17.5, "d_cyl": 60, "b_cyl": 30, "consumption": 3.8
             },
             {
-                "name": "Fortis Malar Hospital, Adyar",
+                "name": "Sunfeast Hospitals",
                 "district": "Chennai",
                 "address": "52 1st Main Rd, Gandhi Nagar, Adyar, Chennai, TN 600020",
                 "lat": 13.0067, "lng": 80.2575,
@@ -120,7 +120,7 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 15.0, "o2_curr": 11.2, "d_cyl": 40, "b_cyl": 20, "consumption": 2.5
             },
             {
-                "name": "MIOT International",
+                "name": "Kamaraj Hospitals",
                 "district": "Chennai",
                 "address": "4/112 Mount Poonamallee Rd, Manapakkam, Chennai, TN 600089",
                 "lat": 13.0232, "lng": 80.1742,
@@ -130,7 +130,7 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 25.0, "o2_curr": 19.8, "d_cyl": 80, "b_cyl": 45, "consumption": 4.2
             },
             {
-                "name": "Kauvery Hospital, Alwarpet",
+                "name": "Nehru Hospitals",
                 "district": "Chennai",
                 "address": "199 Luz Church Rd, Mylapore, Chennai, TN 600004",
                 "lat": 13.0368, "lng": 80.2608,
@@ -140,7 +140,7 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 12.0, "o2_curr": 8.4, "d_cyl": 35, "b_cyl": 20, "consumption": 2.1
             },
             {
-                "name": "Rajiv Gandhi Govt General Hospital (RGGGH)",
+                "name": "Gandhi Hospitals",
                 "district": "Chennai",
                 "address": "EVR Periyar Salai, Park Town, Chennai, TN 600003",
                 "lat": 13.0818, "lng": 80.2785,
@@ -150,7 +150,7 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 30.0, "o2_curr": 24.0, "d_cyl": 120, "b_cyl": 70, "consumption": 5.6
             },
             {
-                "name": "Sri Ramachandra Medical Centre",
+                "name": "Ambedkar Hospitals",
                 "district": "Chennai",
                 "address": "No.1 Ramachandra Nagar, Porur, Chennai, TN 600116",
                 "lat": 13.0366, "lng": 80.1415,
@@ -160,7 +160,7 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 20.0, "o2_curr": 14.5, "d_cyl": 50, "b_cyl": 30, "consumption": 3.2
             },
             {
-                "name": "Christian Medical College & Hospital (CMC)",
+                "name": "MGR Hospitals",
                 "district": "Vellore",
                 "address": "Ida Scudder Rd, Vellore, Tamil Nadu 632004",
                 "lat": 12.9250, "lng": 79.1350,
@@ -170,7 +170,7 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 35.0, "o2_curr": 28.5, "d_cyl": 140, "b_cyl": 80, "consumption": 6.0
             },
             {
-                "name": "Narayana Multispeciality Hospital",
+                "name": "OMR Hospitals",
                 "district": "Vellore",
                 "address": "Katpadi Main Road, Vellore, TN 632014",
                 "lat": 12.9690, "lng": 79.1380,
@@ -180,7 +180,7 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 14.0, "o2_curr": 9.8, "d_cyl": 35, "b_cyl": 18, "consumption": 2.0
             },
             {
-                "name": "PSG Institute of Medical Sciences & Research",
+                "name": "Sunrise Hospitals",
                 "district": "Coimbatore",
                 "address": "Avinashi Rd, Peelamedu, Coimbatore, TN 641004",
                 "lat": 11.0255, "lng": 77.0125,
@@ -190,7 +190,7 @@ def seed_database(force_reseed: bool = False):
                 "o2_tank": 22.0, "o2_curr": 16.0, "d_cyl": 60, "b_cyl": 30, "consumption": 3.4
             },
             {
-                "name": "Ganga Hospital",
+                "name": "APJ Hospitals",
                 "district": "Coimbatore",
                 "address": "313 Mettupalayam Rd, Coimbatore, TN 641043",
                 "lat": 11.0200, "lng": 76.9530,
