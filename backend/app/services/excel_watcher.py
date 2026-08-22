@@ -3,7 +3,7 @@ import asyncio
 import pandas as pd
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
-from app.models import Hospital, Bed, BedType, BedStatus
+from app.models import Hospital, Bed, BedType, BedStatus, BloodInventory
 from app.config import settings
 import logging
 
@@ -81,6 +81,17 @@ def update_beds_status(db_sql: Session, hospital_id: int, bed_type: str, request
             bed.status = "OCCUPIED"
 
 def sync_dataframe_to_databases(df: pd.DataFrame):
+    blood_groups_map = {
+        "blood_a_pos": "A+",
+        "blood_a_neg": "A-",
+        "blood_b_pos": "B+",
+        "blood_b_neg": "B-",
+        "blood_o_pos": "O+",
+        "blood_o_neg": "O-",
+        "blood_ab_pos": "AB+",
+        "blood_ab_neg": "AB-"
+    }
+
     # 1. Sync to SQL Database (SQLite)
     db_sql = SessionLocal()
     try:
@@ -101,6 +112,25 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                 update_beds_status(db_sql, hosp_id, "ICU", int(row.get("icu_beds_available", 0)), int(row.get("icu_beds_total", 0)))
                 update_beds_status(db_sql, hosp_id, "VENTILATOR", int(row.get("ventilators_available", 0)), int(row.get("ventilators_total", 0)))
                 update_beds_status(db_sql, hosp_id, "OXYGEN_SUPPORTED", int(row.get("oxygen_beds_available", 0)), int(row.get("oxygen_beds_total", 0)))
+
+                # Update blood availability
+                for col_name, blood_grp in blood_groups_map.items():
+                    val = row.get(col_name)
+                    if pd.notna(val):
+                        bi = db_sql.query(BloodInventory).filter(
+                            BloodInventory.hospital_id == hosp_id,
+                            BloodInventory.blood_group == blood_grp
+                        ).first()
+                        if bi:
+                            bi.units_available = int(val)
+                        else:
+                            bi = BloodInventory(
+                                hospital_id=hosp_id,
+                                blood_group=blood_grp,
+                                units_available=int(val),
+                                units_critical_threshold=5
+                            )
+                            db_sql.add(bi)
         db_sql.commit()
         print("✅ SQLite database synchronized successfully.")
     except Exception as e:
@@ -123,6 +153,17 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                 continue
 
             doc_ref = fs.collection("hospitals").document(hosp_id)
+            
+            # Construct the blood inventory list matching standard schemas
+            blood_inv_list = []
+            for col_name, blood_grp in blood_groups_map.items():
+                val = row.get(col_name)
+                if pd.notna(val):
+                    blood_inv_list.append({
+                        "blood_group": blood_grp,
+                        "units_available": int(val)
+                    })
+
             doc_ref.set({
                 "id": hosp_id,
                 "name": str(row["name"]),
@@ -134,7 +175,8 @@ def sync_dataframe_to_databases(df: pd.DataFrame):
                 "ventilators_total": int(row.get("ventilators_total", 0)),
                 "oxygen_beds_available": int(row.get("oxygen_beds_available", 0)),
                 "oxygen_beds_total": int(row.get("oxygen_beds_total", 0)),
-                "doctors_on_duty": int(row.get("doctors_on_duty", 0))
+                "doctors_on_duty": int(row.get("doctors_on_duty", 0)),
+                "blood_inventory": blood_inv_list
             }, merge=True)
         print("✅ Firestore database synchronized successfully.")
 

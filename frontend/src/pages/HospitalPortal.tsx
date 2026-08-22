@@ -136,7 +136,8 @@ export const HospitalPortal: React.FC = () => {
               ventilators_total: match.ventilators_total ?? prev.ventilators_total,
               oxygen_beds_available: match.oxygen_beds_available ?? prev.oxygen_beds_available,
               oxygen_beds_total: match.oxygen_beds_total ?? prev.oxygen_beds_total,
-              doctors_on_duty: match.doctors_on_duty ?? prev.doctors_on_duty
+              doctors_on_duty: match.doctors_on_duty ?? prev.doctors_on_duty,
+              blood_inventory: match.blood_inventory ?? prev.blood_inventory
             };
           }
           return prev;
