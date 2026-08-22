@@ -88,9 +88,10 @@ export function App() {
     };
     checkAuth();
 
-    // Persist and listen to Firebase auth state changes
+    // Persist and listen to Firebase auth state changes (only if no JWT token exists)
     const unsubscribeFirebase = onPatientAuthStateChanged((fireUser) => {
-      if (fireUser) {
+      const jwtToken = localStorage.getItem('medflow_token');
+      if (fireUser && !jwtToken) {
         const patientUser: User = {
           id: fireUser.uid,
           email: fireUser.email,
@@ -99,11 +100,6 @@ export function App() {
         };
         setCurrentUser(patientUser);
         setCurrentRole('PATIENT');
-      } else {
-        // Only log out if currently in PATIENT portal to prevent kicking out staff/govt logins
-        if (currentRole === 'PATIENT') {
-          setCurrentUser(null);
-        }
       }
     });
 

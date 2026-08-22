@@ -67,8 +67,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, onContinue
     try {
       const loginId = authMethod === 'ABHA' && selectedRole === 'PATIENT' ? abhaId.trim() : email.trim();
       const res = await api.login(loginId, password);
-      setSuccessMsg(`Welcome back, ${res.user.full_name}!`);
-      setTimeout(() => onLoginSuccess(res.user, res.user.role as UserRole), 500);
+      onLoginSuccess(res.user, res.user.role as UserRole);
     } catch (err: any) {
       setErrorMsg(err.message || 'Invalid email or password. Please check your credentials.');
     } finally {
