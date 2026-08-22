@@ -231,7 +231,7 @@ export function App() {
 
         {/* Patient Portal Views (PATIENT ONLY) */}
         {isTabPermitted && activeTab === 'medicine-tracker' && <MedicineTracker />}
-        {isTabPermitted && activeTab === 'patient-search' && <PatientPortal initialTab="search" />}
+        {isTabPermitted && activeTab === 'patient-search' && <PatientPortal initialTab="search" userToken={localStorage.getItem('token') || undefined} myPeerId={myPeerId} />}
         {isTabPermitted && activeTab === 'second-opinion' && <SecondOpinion />}
         {isTabPermitted && activeTab === 'rural-gateway' && (
           <div className="card" style={{ maxWidth: '800px', margin: '40px auto', padding: '32px', textAlign: 'center' }}>
@@ -257,9 +257,8 @@ export function App() {
             myPeerId={myPeerId}
             onCallPatient={(complaint) => {
               setCallerName(complaint.patient_name);
-              // Dial patient using peer ID scheme
-              const patientPeerId = `medflow-${complaint.patient_id}`;
-              callPeer(patientPeerId, complaint.id);
+              const targetPeerId = complaint.patient_peer_id || `medflow-${complaint.patient_id}`;
+              callPeer(targetPeerId, complaint.id);
             }}
           />
         )}

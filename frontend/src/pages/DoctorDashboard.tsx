@@ -8,6 +8,7 @@ interface Complaint {
   title: string;
   description: string;
   specialization_needed: string;
+  patient_peer_id?: string;
   status: string;
   created_at: string;
 }

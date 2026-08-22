@@ -70,9 +70,10 @@ import { ComplaintForm } from '../components/ComplaintForm';
 interface PatientPortalProps {
   initialTab?: string;
   userToken?: string;
+  myPeerId?: string | null;
 }
 
-export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search', userToken }) => {
+export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search', userToken, myPeerId }) => {
   const { t, language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'search' | 'referral' | 'consultation'>(
     initialTab === 'referral' ? 'referral' : initialTab === 'consultation' ? 'consultation' : 'search'
@@ -978,7 +979,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
           </div>
         </div>
       ) : activeSubTab === 'consultation' ? (
-        <ComplaintForm patientId={1} patientName={patientName} token={userToken} />
+        <ComplaintForm patientId={1} patientName={patientName} token={userToken} myPeerId={myPeerId} />
       ) : null}
     </div>
   );

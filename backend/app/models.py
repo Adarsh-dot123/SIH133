@@ -322,6 +322,7 @@ class PatientComplaint(Base):
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
     specialization_needed = Column(String(100), nullable=False, default="General Medicine")
+    patient_peer_id = Column(String(100), nullable=True)
     status = Column(String(30), default="OPEN")
     assigned_doctor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

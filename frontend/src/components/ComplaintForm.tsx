@@ -14,6 +14,7 @@ interface ComplaintFormProps {
   patientId: number;
   patientName: string;
   token?: string;
+  myPeerId?: string | null;
   onIncomingCall?: (callInfo: { doctorName: string; peerId: string; complaintId: number }) => void;
 }
 
@@ -35,7 +36,7 @@ function detectSpecialty(text: string): string {
 
 const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
 
-export const ComplaintForm: React.FC<ComplaintFormProps> = ({ token }) => {
+export const ComplaintForm: React.FC<ComplaintFormProps> = ({ token, myPeerId }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [detectedSpec, setDetectedSpec] = useState('General Medicine');
@@ -74,7 +75,7 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ token }) => {
       const res = await fetch(`${API}/api/complaints`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ title, description })
+        body: JSON.stringify({ title, description, patient_peer_id: myPeerId })
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();

@@ -33,11 +33,13 @@ def detect_specialty(text: str) -> str:
 class ComplaintCreate(BaseModel):
     title: str
     description: str
+    patient_peer_id: Optional[str] = None
 
 
 class ComplaintStatusUpdate(BaseModel):
     status: str  # OPEN, IN_CALL, RESOLVED
     assigned_doctor_id: Optional[int] = None
+    patient_peer_id: Optional[str] = None
 
 
 class DoctorPeerUpdate(BaseModel):
@@ -57,6 +59,7 @@ async def create_complaint(
         title=payload.title,
         description=payload.description,
         specialization_needed=specialty,
+        patient_peer_id=payload.patient_peer_id,
         status="OPEN",
         created_at=datetime.datetime.utcnow()
     )
@@ -110,6 +113,8 @@ async def update_complaint_status(
     complaint.status = payload.status
     if payload.assigned_doctor_id:
         complaint.assigned_doctor_id = payload.assigned_doctor_id
+    if payload.patient_peer_id:
+        complaint.patient_peer_id = payload.patient_peer_id
     complaint.updated_at = datetime.datetime.utcnow()
     db.commit()
 
