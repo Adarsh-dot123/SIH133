@@ -343,10 +343,9 @@ async def tick_sqlite_medicine_timers():
                         fs = init_firebase_admin()
                         if fs:
                             doc_id = f"{mi.hospital_id}_{mi.med_id}"
-                            fs.collection("medicines").document(doc_id).update({
+                            fs.collection("medicines").document(doc_id).set({
                                 "restockEta": mi.restock_eta
-                            })
-                            print(f"⏱️ Restocking {mi.medicine_name} for facility {mi.hospital_id}: {mi.restock_eta}s remaining")
+                            }, merge=True)
                     except Exception as fs_err:
                         print(f"❌ Error updating Firestore restock ETA: {fs_err}")
                 else:
@@ -360,47 +359,32 @@ async def tick_sqlite_medicine_timers():
                         fs = init_firebase_admin()
                         if fs:
                             doc_id = f"{mi.hospital_id}_{mi.med_id}"
-                            fs.collection("medicines").document(doc_id).update({
+                            fs.collection("medicines").document(doc_id).set({
                                 "stockLevel": 95,
+                                "stock_level": 95,
                                 "isRestocking": False,
                                 "restockEta": 0,
                                 "vehicle": ""
-                            })
+                            }, merge=True)
                             print(f"✅ Delivery complete for {mi.medicine_name} at facility {mi.hospital_id}")
                     except Exception as fs_err:
                         print(f"❌ Error updating Firestore restock completion: {fs_err}")
 
                     # Write back to Google Sheets!
                     update_google_sheet_cell(mi.hospital_id, mi.med_id, 95)
-            
-            # 2. Simulate consumption (burn rate) every 10 seconds
-            if tick_count % 10 == 0:
-                all_items = db.query(MedicineInventory).all()
-                for mi in all_items:
-                    if not mi.is_restocking:
-                        prev_int = int(mi.stock_level)
-                        mi.stock_level = max(0.0, mi.stock_level - (mi.burn_rate * 0.167))
-                        new_int = int(mi.stock_level)
-                        
-                        if new_int != prev_int:
-                            # Update Firestore
-                            try:
-                                fs = init_firebase_admin()
-                                if fs:
-                                    doc_id = f"{mi.hospital_id}_{mi.med_id}"
-                                    fs.collection("medicines").document(doc_id).update({
-                                        "stockLevel": new_int
-                                    })
-                            except Exception as fs_err:
-                                print(f"❌ Error updating Firestore consumption: {fs_err}")
-                            
-                            # Write back to Google Sheet!
-                            update_google_sheet_cell(mi.hospital_id, mi.med_id, new_int)
             db.commit()
         except Exception as e:
             print(f"❌ Exception in tick_sqlite_medicine_timers main loop: {e}")
         finally:
             db.close()
+
+def extract_spreadsheet_id_and_gid(url: str):
+    import re
+    sp_match = re.search(r'/d/([a-zA-Z0-9-_]+)', url)
+    gid_match = re.search(r'[#&?]gid=([0-9]+)', url)
+    sp_id = sp_match.group(1) if sp_match else None
+    gid = gid_match.group(1) if gid_match else None
+    return sp_id, gid
 
 async def start_excel_watcher_task():
     import hashlib
@@ -408,11 +392,13 @@ async def start_excel_watcher_task():
     asyncio.create_task(tick_sqlite_medicine_timers())
     
     gsheet_url = settings.GOOGLE_SHEET_URL
-    spreadsheet_id = extract_spreadsheet_id(gsheet_url) if gsheet_url else None
+    spreadsheet_id, gid = extract_spreadsheet_id_and_gid(gsheet_url) if gsheet_url else (None, None)
     
     if spreadsheet_id:
-        print(f"🌐 Google Sheet Watcher initialized for Spreadsheet ID: {spreadsheet_id}")
         csv_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv"
+        if gid:
+            csv_url += f"&gid={gid}"
+        print(f"🌐 Google Sheet Watcher initialized for Spreadsheet ID: {spreadsheet_id} (GID: {gid})")
         last_hash = None
         
         while True:
@@ -429,7 +415,7 @@ async def start_excel_watcher_task():
                     sync_dataframe_to_databases(df)
             except Exception as e:
                 logger.error(f"Error fetching Google Sheet: {e}")
-            await asyncio.sleep(10)
+            await asyncio.sleep(3)
     else:
         print("📁 Google Sheet URL not configured. Falling back to local hospitals_data.xlsx watcher...")
         excel_path = "hospitals_data.xlsx"
