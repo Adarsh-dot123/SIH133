@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Stethoscope, Phone, Clock, CheckCircle, RefreshCw, User2, Activity } from 'lucide-react';
-import { subscribeToComplaints, updateComplaintState, PatientComplaintItem } from '../services/complaintsService';
+import { subscribeToComplaints, updateComplaintState, getLocalComplaints, PatientComplaintItem } from '../services/complaintsService';
 
 interface DoctorDashboardProps {
   doctorName: string;
@@ -77,9 +77,19 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
             <Activity size={18} style={{ color: '#0d9488' }} />
             Live Consultation Queue — {specialization}
           </h3>
-          <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <RefreshCw size={12} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Live Synced
-          </div>
+          <button
+            onClick={() => {
+              setLoading(true);
+              const list = getLocalComplaints();
+              setComplaints(list.filter(c => (c.specialization_needed === specialization || specialization === 'ALL') && c.status !== 'RESOLVED'));
+              setTimeout(() => setLoading(false), 400);
+            }}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '6px 14px', cursor: 'pointer', background: '#f1f5f9', border: '1px solid #cbd5e1' }}
+          >
+            <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none', color: '#0d9488' }} />
+            <span style={{ fontWeight: 700, color: '#334155' }}>Refresh Queue</span>
+          </button>
         </div>
 
         {complaints.length === 0 ? (
