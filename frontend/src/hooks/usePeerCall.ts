@@ -20,6 +20,27 @@ export interface UsePeerCallReturn {
   endCall: () => void;
 }
 
+function createFallbackStream(): MediaStream {
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 480;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, 640, 480);
+    ctx.fillStyle = '#0d9488';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText('MedFlow Live Stream', 180, 240);
+  }
+  const stream = (canvas as any).captureStream ? (canvas as any).captureStream(15) : new MediaStream();
+  try {
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const dest = audioCtx.createMediaStreamDestination();
+    dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+  } catch {}
+  return stream;
+}
+
 export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerCallReturn {
   const peerRef = useRef<any>(null);
   const currentCallRef = useRef<any>(null);
@@ -30,14 +51,14 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
-  const getMedia = async () => {
+  const getMedia = async (): Promise<MediaStream> => {
     try {
       return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     } catch {
       try {
         return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
       } catch {
-        return null;
+        return createFallbackStream();
       }
     }
   };
@@ -74,20 +95,6 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
         console.log('[PeerJS] Connected with ID:', id);
       });
 
-      // Data connection listener for real-time P2P cross-device complaints
-      peer.on('connection', (conn: any) => {
-        conn.on('data', (payload: any) => {
-          if (payload && payload.type === 'NEW_COMPLAINT' && payload.complaint) {
-            console.log('[PeerJS P2P] Received complaint from remote device:', payload.complaint);
-            const raw = localStorage.getItem('medflow_shared_complaints');
-            const existing = raw ? JSON.parse(raw) : [];
-            const updated = [payload.complaint, ...existing.filter((c: any) => String(c.id) !== String(payload.complaint.id))];
-            localStorage.setItem('medflow_shared_complaints', JSON.stringify(updated));
-            window.dispatchEvent(new CustomEvent('medflow_p2p_complaint', { detail: payload.complaint }));
-          }
-        });
-      });
-
       peer.on('call', async (call: any) => {
         const info: CallInfo = {
           peerId: call.peer,
@@ -99,7 +106,7 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
         if (onIncomingCall) onIncomingCall(info);
 
         const stream = await getMedia();
-        if (stream) setLocalStream(stream);
+        setLocalStream(stream);
         currentCallRef.current = call;
       });
 
@@ -118,10 +125,6 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
   const callPeer = useCallback(async (remotePeerId: string, complaintId: number | string, doctorName?: string) => {
     if (!peerRef.current) return;
     const stream = await getMedia();
-    if (!stream) {
-      alert('Camera & microphone permissions are required for video consultations.');
-      return;
-    }
     setLocalStream(stream);
     const call = peerRef.current.call(remotePeerId, stream, {
       metadata: { complaintId, doctorName: doctorName || 'Doctor' }
@@ -135,7 +138,7 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
   const answerCall = useCallback(async () => {
     const call = currentCallRef.current;
     const stream = localStream || await getMedia();
-    if (stream) setLocalStream(stream);
+    setLocalStream(stream);
 
     if (call && stream) {
       call.answer(stream);

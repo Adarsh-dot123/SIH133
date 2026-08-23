@@ -285,8 +285,8 @@ export function App() {
             myPeerId={myPeerId}
             onCallPatient={(complaint) => {
               setCallerName(complaint.patient_name);
-              const targetPeerId = complaint.patient_peer_id || `medflow-${complaint.patient_id}`;
-              callPeer(targetPeerId, complaint.id);
+              const targetPeerId = complaint.patient_peer_id || ('medflow-' + (complaint.patient_name || '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+              callPeer(targetPeerId, complaint.id, currentUser?.full_name || 'Dr. Arun Sharma');
             }}
           />
         )}

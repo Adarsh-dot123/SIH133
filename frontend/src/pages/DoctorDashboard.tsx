@@ -36,6 +36,7 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
   };
 
   const handleResolve = async (complaintId: number | string) => {
+    setComplaints(prev => prev.filter(c => String(c.id) !== String(complaintId)));
     await updateComplaintState(complaintId, 'RESOLVED');
   };
 
