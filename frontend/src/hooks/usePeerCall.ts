@@ -30,7 +30,7 @@ function createFallbackStream(): MediaStream {
     ctx.fillRect(0, 0, 640, 480);
     ctx.fillStyle = '#0d9488';
     ctx.font = 'bold 28px sans-serif';
-    ctx.fillText('MedFlow Live Stream', 180, 240);
+    ctx.fillText('MedFlow Live Video Feed', 150, 240);
   }
   const stream = (canvas as any).captureStream ? (canvas as any).captureStream(15) : new MediaStream();
   try {
@@ -78,8 +78,7 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
   const createPeerInstance = useCallback((userId: string, attempt = 0) => {
     import('peerjs').then(({ default: Peer }) => {
       const cleanUser = userId.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const uniqueSuffix = attempt === 0 ? Math.random().toString(36).substring(2, 6) : `${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 4)}`;
-      const uniqueId = `medflow-${cleanUser}-${uniqueSuffix}`;
+      const uniqueId = attempt === 0 ? `medflow-${cleanUser}` : `medflow-${cleanUser}-${Math.random().toString(36).substring(2, 6)}`;
 
       const peer = new Peer(uniqueId, {
         config: {
@@ -96,7 +95,27 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
 
       peer.on('open', (id: string) => {
         setMyPeerId(id);
-        console.log('[PeerJS] Online with unique ID:', id);
+        console.log('[PeerJS] Online with ID:', id);
+      });
+
+      // Handle DataConnections for Instant Cross-Device P2P Sync
+      peer.on('connection', (conn: any) => {
+        conn.on('data', (data: any) => {
+          if (data?.type === 'NEW_COMPLAINT' && data.complaint) {
+            console.log('[P2P WebRTC] Received new consultation:', data.complaint);
+            const raw = localStorage.getItem('medflow_shared_complaints');
+            const existing = raw ? JSON.parse(raw) : [];
+            const updated = [data.complaint, ...existing.filter((c: any) => String(c.id) !== String(data.complaint.id))];
+            localStorage.setItem('medflow_shared_complaints', JSON.stringify(updated));
+            window.dispatchEvent(new CustomEvent('medflow_p2p_sync'));
+          } else if (data?.type === 'RESOLVE_COMPLAINT' && data.complaintId) {
+            const raw = localStorage.getItem('medflow_shared_complaints');
+            const existing = raw ? JSON.parse(raw) : [];
+            const updated = existing.map((c: any) => String(c.id) === String(data.complaintId) ? { ...c, status: 'RESOLVED' } : c);
+            localStorage.setItem('medflow_shared_complaints', JSON.stringify(updated));
+            window.dispatchEvent(new CustomEvent('medflow_p2p_sync'));
+          }
+        });
       });
 
       peer.on('call', async (call: any) => {
@@ -107,16 +126,19 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
           complaintId: call.metadata?.complaintId || 0
         };
         setIncomingCallInfo(info);
-        setIsIncoming(true);
+        setIsIncoming(false);
+        setIsCallActive(true);
         if (onIncomingCall) onIncomingCall(info);
 
         const stream = await getMedia();
         setLocalStream(stream);
+        call.answer(stream);
+        addRemoteStream(call);
         currentCallRef.current = call;
       });
 
       peer.on('error', (err: any) => {
-        console.warn('[PeerJS] Notice:', err.type || err);
+        console.warn('[PeerJS] Error notice:', err.type || err);
         if (err.type === 'unavailable-id' && attempt < 3) {
           createPeerInstance(userId, attempt + 1);
         }

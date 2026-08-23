@@ -15,7 +15,6 @@ export interface PatientComplaintItem {
 }
 
 const STORAGE_KEY = 'medflow_shared_complaints';
-const CRUD_API = 'https://crudcrud.com/api/9bc374dcb6ed46b8a5323932a9022c4e/complaints';
 
 const channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
   ? new BroadcastChannel('medflow_complaints_channel')
@@ -50,31 +49,19 @@ export function saveLocalComplaints(list: PatientComplaintItem[]) {
   } catch {}
 }
 
-export async function fetchFromCloud(): Promise<PatientComplaintItem[]> {
+export function sendP2PData(targetPeerId: string, payload: any) {
+  const activePeer = (window as any).__medflow_peer;
+  if (!activePeer || activePeer.destroyed) return;
+
   try {
-    const res = await fetch(CRUD_API);
-    if (!res.ok) return [];
-    const items = await res.json();
-    if (Array.isArray(items)) {
-      return items.map((item: any) => ({
-        id: item._id || item.id || Date.now(),
-        _id: item._id,
-        patient_name: item.patient_name || 'Patient',
-        patient_email: item.patient_email,
-        title: item.title || '',
-        description: item.description || '',
-        specialization_needed: item.specialization_needed || 'General Medicine',
-        patient_peer_id: item.patient_peer_id || (item.patient_email ? `medflow-${item.patient_email.toLowerCase().replace(/[^a-z0-9]/g, '')}` : ''),
-        status: item.status || 'OPEN',
-        assigned_doctor_name: item.assigned_doctor_name,
-        doctor_peer_id: item.doctor_peer_id,
-        created_at: item.created_at || new Date().toISOString()
-      }));
-    }
+    const conn = activePeer.connect(targetPeerId);
+    conn.on('open', () => {
+      conn.send(payload);
+      console.log(`[P2P WebRTC] Successfully sent to ${targetPeerId}`);
+    });
   } catch (err) {
-    console.warn("CRUD Cloud sync fetch notice:", err);
+    console.warn(`[P2P WebRTC] Send notice for ${targetPeerId}:`, err);
   }
-  return [];
 }
 
 export async function submitNewComplaint(complaint: Omit<PatientComplaintItem, 'id' | 'created_at' | 'status'> & { id?: number | string; status?: string }): Promise<PatientComplaintItem> {
@@ -95,59 +82,32 @@ export async function submitNewComplaint(complaint: Omit<PatientComplaintItem, '
   const updated = [fullItem, ...existing.filter(c => String(c.id) !== String(newId))];
   saveLocalComplaints(updated);
 
-  // 2. Post to Cloud CRUD API
-  try {
-    const res = await fetch(CRUD_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fullItem)
-    });
-    if (res.ok) {
-      const created = await res.json();
-      if (created && created._id) {
-        fullItem._id = created._id;
-        fullItem.id = created._id;
-        const fresh = [fullItem, ...existing.filter(c => String(c.id) !== String(newId))];
-        saveLocalComplaints(fresh);
-      }
-    }
-  } catch (err) {
-    console.warn("CRUD Cloud POST notice:", err);
-  }
+  // 2. Transmit directly to Doctor over WebRTC DataChannel
+  const targetDoctorPeer = fullItem.doctor_peer_id || docInfo.peerId;
+  sendP2PData(targetDoctorPeer, { type: 'NEW_COMPLAINT', complaint: fullItem });
 
   return fullItem;
 }
 
 export async function updateComplaintState(complaintId: number | string, status: string, doctorName?: string) {
   const existing = getLocalComplaints();
-  const target = existing.find(c => String(c.id) === String(complaintId) || String(c._id) === String(complaintId));
-  
   const updated = existing.map(c => {
-    if (String(c.id) === String(complaintId) || String(c._id) === String(complaintId)) {
+    if (String(c.id) === String(complaintId)) {
       return { ...c, status, ...(doctorName ? { assigned_doctor_name: doctorName } : {}) };
     }
     return c;
   });
   saveLocalComplaints(updated);
 
-  // Update on cloud CRUD
-  if (target && target._id) {
-    try {
-      const { _id, ...cleanData } = { ...target, status, ...(doctorName ? { assigned_doctor_name: doctorName } : {}) };
-      await fetch(`${CRUD_API}/${target._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cleanData)
-      });
-    } catch {}
+  // Broadcast resolution to peer network
+  const target = existing.find(c => String(c.id) === String(complaintId));
+  if (target?.patient_peer_id) {
+    sendP2PData(target.patient_peer_id, { type: 'RESOLVE_COMPLAINT', complaintId });
   }
 }
 
 export async function fetchLiveComplaints(specialization: string | null): Promise<PatientComplaintItem[]> {
-  const cloudList = await fetchFromCloud();
-  const list = cloudList.length > 0 ? cloudList : getLocalComplaints();
-  saveLocalComplaints(list);
-
+  const list = getLocalComplaints();
   if (specialization && specialization !== 'ALL') {
     return list.filter(c => c.specialization_needed.toLowerCase() === specialization.toLowerCase() && c.status !== 'RESOLVED');
   }
@@ -158,38 +118,34 @@ export function subscribeToComplaints(
   specialization: string | null,
   onUpdate: (complaints: PatientComplaintItem[]) => void
 ): () => void {
-  const refresh = async () => {
-    const list = await fetchLiveComplaints(specialization);
-    onUpdate(list);
+  const refresh = () => {
+    const list = getLocalComplaints();
+    if (specialization && specialization !== 'ALL') {
+      onUpdate(list.filter(c => c.specialization_needed.toLowerCase() === specialization.toLowerCase() && c.status !== 'RESOLVED'));
+    } else {
+      onUpdate(list.filter(c => c.status !== 'RESOLVED'));
+    }
   };
 
   const handleMessage = (e: MessageEvent) => {
     if (e.data?.type === 'SYNC_COMPLAINTS') {
-      const list = getLocalComplaints();
-      if (specialization && specialization !== 'ALL') {
-        onUpdate(list.filter(c => c.specialization_needed.toLowerCase() === specialization.toLowerCase() && c.status !== 'RESOLVED'));
-      } else {
-        onUpdate(list.filter(c => c.status !== 'RESOLVED'));
-      }
+      refresh();
     }
   };
 
+  const handleP2PSync = () => {
+    refresh();
+  };
+
   if (channel) channel.addEventListener('message', handleMessage);
+  window.addEventListener('medflow_p2p_sync', handleP2PSync);
 
-  // Initial load from local
-  const initialLocal = getLocalComplaints();
-  if (specialization && specialization !== 'ALL') {
-    onUpdate(initialLocal.filter(c => c.specialization_needed.toLowerCase() === specialization.toLowerCase() && c.status !== 'RESOLVED'));
-  } else {
-    onUpdate(initialLocal.filter(c => c.status !== 'RESOLVED'));
-  }
-
-  // Cloud pull
   refresh();
-  const interval = setInterval(refresh, 2500);
+  const interval = setInterval(refresh, 2000);
 
   return () => {
     if (channel) channel.removeEventListener('message', handleMessage);
+    window.removeEventListener('medflow_p2p_sync', handleP2PSync);
     clearInterval(interval);
   };
 }
