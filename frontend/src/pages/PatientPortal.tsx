@@ -71,9 +71,10 @@ interface PatientPortalProps {
   initialTab?: string;
   userToken?: string;
   myPeerId?: string | null;
+  onCallDoctor?: (targetPeerId: string, doctorName: string, complaintId: number | string) => void;
 }
 
-export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search', userToken, myPeerId }) => {
+export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search', userToken, myPeerId, onCallDoctor }) => {
   const { t, language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'search' | 'referral' | 'consultation'>(
     initialTab === 'referral' ? 'referral' : initialTab === 'consultation' ? 'consultation' : 'search'
@@ -979,7 +980,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
           </div>
         </div>
       ) : activeSubTab === 'consultation' ? (
-        <ComplaintForm patientId={1} patientName={patientName} token={userToken} myPeerId={myPeerId} />
+        <ComplaintForm patientId={1} patientName={patientName} token={userToken} myPeerId={myPeerId} onCallDoctor={onCallDoctor} />
       ) : null}
     </div>
   );

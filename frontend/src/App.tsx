@@ -248,7 +248,17 @@ export function App() {
 
         {/* Patient Portal Views (PATIENT ONLY) */}
         {isTabPermitted && activeTab === 'medicine-tracker' && <MedicineTracker />}
-        {isTabPermitted && activeTab === 'patient-search' && <PatientPortal initialTab="search" userToken={localStorage.getItem('medflow_token') || undefined} myPeerId={myPeerId} />}
+        {isTabPermitted && activeTab === 'patient-search' && (
+          <PatientPortal
+            initialTab="search"
+            userToken={localStorage.getItem('medflow_token') || undefined}
+            myPeerId={myPeerId}
+            onCallDoctor={(targetPeerId, doctorName, complaintId) => {
+              setCallerName(doctorName);
+              callPeer(targetPeerId, complaintId, currentUser?.full_name || 'Patient');
+            }}
+          />
+        )}
         {isTabPermitted && activeTab === 'second-opinion' && <SecondOpinion />}
         {isTabPermitted && activeTab === 'rural-gateway' && (
           <div className="card" style={{ maxWidth: '800px', margin: '40px auto', padding: '32px', textAlign: 'center' }}>

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Send, Clock, CheckCircle, AlertCircle, Phone } from 'lucide-react';
-import { submitNewComplaint, subscribeToComplaints, PatientComplaintItem } from '../services/complaintsService';
+import { MessageSquare, Send, Clock, CheckCircle, AlertCircle, Phone, Video } from 'lucide-react';
+import { submitNewComplaint, subscribeToComplaints, PatientComplaintItem, getDoctorForSpecialty } from '../services/complaintsService';
 
 interface ComplaintFormProps {
   patientId: number;
   patientName: string;
   token?: string;
   myPeerId?: string | null;
-  onIncomingCall?: (callInfo: { doctorName: string; peerId: string; complaintId: number }) => void;
+  onCallDoctor?: (targetPeerId: string, doctorName: string, complaintId: number | string) => void;
 }
 
 const SPECIALTY_KEYWORDS: Record<string, string[]> = {
@@ -26,7 +26,7 @@ function detectSpecialty(text: string): string {
   return 'General Medicine';
 }
 
-export const ComplaintForm: React.FC<ComplaintFormProps> = ({ patientName, myPeerId }) => {
+export const ComplaintForm: React.FC<ComplaintFormProps> = ({ patientName, myPeerId, onCallDoctor }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [detectedSpec, setDetectedSpec] = useState('General Medicine');
@@ -51,17 +51,18 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ patientName, myPee
     if (!title.trim()) { setError('Please enter a symptom title.'); return; }
     setSubmitting(true); setError('');
     const spec = detectedSpec;
+    const docInfo = getDoctorForSpecialty(spec);
     
     try {
       await submitNewComplaint({
-        patient_name: patientName || 'Patient',
+        patient_name: patientName || 'Ramesh Kumar',
         title,
         description,
         specialization_needed: spec,
-        patient_peer_id: myPeerId || undefined,
+        patient_peer_id: myPeerId || 'medflow-rameshpatientin',
       });
 
-      setSuccessMsg(`Complaint submitted! Matched to ${spec} specialist. A doctor will call you shortly.`);
+      setSuccessMsg(`Complaint submitted! Matched to ${spec} specialist (${docInfo.name}). You can start a video call now.`);
       setTitle('');
       setDescription('');
     } catch (err: any) {
@@ -80,10 +81,10 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ patientName, myPee
       <div className="card" style={{ padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
           <MessageSquare size={20} style={{ color: '#0d9488' }} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Talk to a Doctor</h3>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Talk to a Doctor (Instant Consultation)</h3>
         </div>
         <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '16px' }}>
-          Describe your symptoms and we'll connect you with the right specialist via a live video call.
+          Describe your symptoms and connect directly with an on-duty specialist via 1-on-1 live video call.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -111,7 +112,7 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ patientName, myPee
 
           {title && (
             <div style={{ background: '#f0fdfa', border: '1px solid #ccfbf1', padding: '8px 12px', borderRadius: '8px', fontSize: '0.8rem', color: '#0f766e', fontWeight: 600 }}>
-              🩺 Auto-matched to: <strong>{detectedSpec}</strong> specialist
+              🩺 Auto-matched to: <strong>{detectedSpec}</strong> specialist ({getDoctorForSpecialty(detectedSpec).name})
             </div>
           )}
 
@@ -125,31 +126,55 @@ export const ComplaintForm: React.FC<ComplaintFormProps> = ({ patientName, myPee
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', fontWeight: 700 }}
           >
             <Send size={16} />
-            {submitting ? 'Submitting...' : 'Submit & Connect to Doctor'}
+            {submitting ? 'Submitting...' : 'Submit & Match Doctor'}
           </button>
         </form>
       </div>
 
-      {/* Complaint History */}
+      {/* Complaint History & Video Call Action */}
       {complaints.length > 0 && (
         <div className="card" style={{ padding: '20px' }}>
-          <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', marginBottom: '12px' }}>Your Consultations</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {complaints.map(c => (
-              <div key={c.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0f172a' }}>{c.title}</div>
-                  <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>{c.specialization_needed} • {new Date(c.created_at).toLocaleString('en-IN')}</div>
-                  {c.assigned_doctor_name && (
-                    <div style={{ fontSize: '0.72rem', color: '#0d9488', marginTop: '2px', fontWeight: 600 }}>Attending: {c.assigned_doctor_name}</div>
-                  )}
+          <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', marginBottom: '12px' }}>Your Consultations & Live Video Connect</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {complaints.map(c => {
+              const docInfo = getDoctorForSpecialty(c.specialization_needed);
+              const targetDocPeer = c.doctor_peer_id || docInfo.peerId;
+              const docName = c.assigned_doctor_name || docInfo.name;
+
+              return (
+                <div key={c.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>{c.title}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                        {c.specialization_needed} • {new Date(c.created_at).toLocaleTimeString('en-IN')}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#0d9488', marginTop: '4px', fontWeight: 700 }}>
+                        👨‍⚕️ Assigned Specialist: {docName}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', fontWeight: 700, color: statusColor(c.status), background: '#ffffff', padding: '3px 8px', borderRadius: '9999px', border: `1px solid ${statusColor(c.status)}30` }}>
+                      {statusIcon(c.status)}
+                      {c.status.replace('_', ' ')}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                    <button
+                      onClick={() => {
+                        if (onCallDoctor) {
+                          onCallDoctor(targetDocPeer, docName, c.id);
+                        }
+                      }}
+                      className="btn btn-primary"
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '8px 14px', fontWeight: 700, background: '#059669', borderColor: '#059669' }}
+                    >
+                      <Video size={16} /> 📹 Start Video Call with {docName}
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', fontWeight: 700, color: statusColor(c.status), background: '#ffffff', padding: '3px 8px', borderRadius: '9999px', border: `1px solid ${statusColor(c.status)}30` }}>
-                  {statusIcon(c.status)}
-                  {c.status.replace('_', ' ')}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

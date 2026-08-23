@@ -1,5 +1,3 @@
-import { subscribeCollection, updateFirestoreDoc } from '../firebase';
-
 export interface PatientComplaintItem {
   id: number | string;
   patient_id?: number | string;
@@ -10,23 +8,25 @@ export interface PatientComplaintItem {
   patient_peer_id?: string;
   status: string; // OPEN, IN_CALL, RESOLVED
   assigned_doctor_name?: string;
+  doctor_peer_id?: string;
   created_at: string;
 }
 
 const STORAGE_KEY = 'medflow_shared_complaints';
-const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
+const RELAY_TOPIC = 'medflow_sih_live_consultations_v2026';
 
-const channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
-  ? new BroadcastChannel('medflow_complaints_broadcast')
-  : null;
-
-const SPECIALTY_DOCTOR_PEERS: Record<string, string[]> = {
-  Cardiology: ['medflow-drarunapolloin', 'medflow-doctor-cardiology'],
-  Pediatrics: ['medflow-drpriyafortisin', 'medflow-doctor-pediatrics'],
-  Neurology: ['medflow-drrajankamarajin', 'medflow-doctor-neurology'],
-  Pulmonology: ['medflow-drmeenamehruin', 'medflow-doctor-pulmonology'],
-  Nephrology: ['medflow-drvikramgandhiin', 'medflow-doctor-nephrology'],
+const SPECIALTY_DOCTOR_MAP: Record<string, { name: string; peerId: string }> = {
+  Cardiology: { name: 'Dr. Arun Sharma', peerId: 'medflow-drarunapolloin' },
+  Pediatrics: { name: 'Dr. Priya Nair', peerId: 'medflow-drpriyafortisin' },
+  Neurology: { name: 'Dr. Rajan Kumar', peerId: 'medflow-drrajankamarajin' },
+  Pulmonology: { name: 'Dr. Meena Patel', peerId: 'medflow-drmeenamehruin' },
+  Nephrology: { name: 'Dr. Vikram Singh', peerId: 'medflow-drvikramgandhiin' },
+  'General Medicine': { name: 'Dr. Arun Sharma', peerId: 'medflow-drarunapolloin' }
 };
+
+export function getDoctorForSpecialty(spec: string) {
+  return SPECIALTY_DOCTOR_MAP[spec] || SPECIALTY_DOCTOR_MAP['Cardiology'];
+}
 
 export function getLocalComplaints(): PatientComplaintItem[] {
   try {
@@ -40,66 +40,34 @@ export function getLocalComplaints(): PatientComplaintItem[] {
 export function saveLocalComplaints(list: PatientComplaintItem[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    if (channel) channel.postMessage({ type: 'SYNC_COMPLAINTS', list });
   } catch {}
-}
-
-export async function sendDirectP2PComplaint(complaint: PatientComplaintItem) {
-  const activePeer = (window as any).__medflow_peer;
-  const targetIds = SPECIALTY_DOCTOR_PEERS[complaint.specialization_needed] || ['medflow-drarunapolloin'];
-
-  targetIds.forEach(targetId => {
-    try {
-      if (activePeer && !activePeer.destroyed) {
-        const conn = activePeer.connect(targetId);
-        conn.on('open', () => {
-          conn.send({ type: 'NEW_COMPLAINT', complaint });
-          console.log(`[P2P] Sent complaint directly to ${targetId}`);
-        });
-      }
-    } catch (e) {
-      console.warn(`[P2P] Could not send to ${targetId}:`, e);
-    }
-  });
 }
 
 export async function submitNewComplaint(complaint: Omit<PatientComplaintItem, 'id' | 'created_at' | 'status'> & { id?: number | string; status?: string }): Promise<PatientComplaintItem> {
   const newId = complaint.id || Date.now();
+  const docInfo = getDoctorForSpecialty(complaint.specialization_needed);
+  
   const fullItem: PatientComplaintItem = {
     ...complaint,
     id: newId,
     status: complaint.status || 'OPEN',
+    assigned_doctor_name: docInfo.name,
+    doctor_peer_id: docInfo.peerId,
     created_at: new Date().toISOString()
   };
 
-  // 1. Save to local store and broadcast
+  // 1. Save to local storage
   const existing = getLocalComplaints();
   const updated = [fullItem, ...existing.filter(c => String(c.id) !== String(newId))];
   saveLocalComplaints(updated);
 
-  // 2. Direct WebRTC P2P push to Doctor's active peer on remote device
-  sendDirectP2PComplaint(fullItem);
-
-  // 3. Push to Firestore for cross-device cloud sync
+  // 2. Publish to Global Real-Time Cloud Relay (Instant cross-device push)
   try {
-    await updateFirestoreDoc('patient_complaints', String(newId), fullItem);
-  } catch {}
-
-  // 4. Push to backend SQLite API if reachable
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2000);
-    await fetch(`${API}/api/complaints`, {
+    fetch(`https://ntfy.sh/${RELAY_TOPIC}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        title: fullItem.title,
-        description: fullItem.description,
-        patient_peer_id: fullItem.patient_peer_id
-      })
-    });
-    clearTimeout(timer);
+      body: JSON.stringify({ type: 'NEW_COMPLAINT', complaint: fullItem })
+    }).catch(() => {});
   } catch {}
 
   return fullItem;
@@ -116,25 +84,13 @@ export async function updateComplaintState(complaintId: number | string, status:
   });
   saveLocalComplaints(updated);
 
-  // 2. Firestore cloud update
+  // 2. Publish to Global Cloud Relay
   try {
-    await updateFirestoreDoc('patient_complaints', String(complaintId), {
-      status,
-      ...(doctorName ? { assigned_doctor_name: doctorName } : {})
-    });
-  } catch {}
-
-  // 3. Backend API update
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2000);
-    await fetch(`${API}/api/complaints/${complaintId}/status`, {
-      method: 'PATCH',
+    fetch(`https://ntfy.sh/${RELAY_TOPIC}`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({ status })
-    });
-    clearTimeout(timer);
+      body: JSON.stringify({ type: 'STATUS_UPDATE', complaintId, status, doctorName })
+    }).catch(() => {});
   } catch {}
 }
 
@@ -142,86 +98,51 @@ export function subscribeToComplaints(
   specialization: string | null,
   onUpdate: (complaints: PatientComplaintItem[]) => void
 ): () => void {
-  const refresh = async () => {
-    let list: PatientComplaintItem[] = getLocalComplaints();
-
-    // Try Backend API first if on localhost
-    try {
-      const url = specialization 
-        ? `${API}/api/complaints?specialization=${encodeURIComponent(specialization)}`
-        : `${API}/api/complaints`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const idMap = new Map<string, PatientComplaintItem>();
-          list.forEach(item => idMap.set(String(item.id), item));
-          data.forEach((item: PatientComplaintItem) => {
-            const prev = idMap.get(String(item.id));
-            idMap.set(String(item.id), { ...item, patient_peer_id: item.patient_peer_id || prev?.patient_peer_id });
-          });
-          list = Array.from(idMap.values());
-        }
-      }
-    } catch {}
-
+  const refresh = () => {
+    const list = getLocalComplaints();
     if (specialization) {
-      onUpdate(list.filter(c => c.specialization_needed === specialization && c.status !== 'RESOLVED'));
+      onUpdate(list.filter(c => (c.specialization_needed === specialization || specialization === 'ALL') && c.status !== 'RESOLVED'));
     } else {
       onUpdate(list);
     }
   };
 
-  // 1. Subscribe to Firestore cloud updates
-  const unsubFirestore = subscribeCollection('patient_complaints', (docs) => {
-    if (docs && docs.length > 0) {
-      const merged = docs.map(d => ({
-        id: d.id,
-        patient_name: d.patient_name || 'Patient',
-        title: d.title || '',
-        description: d.description || '',
-        specialization_needed: d.specialization_needed || 'General Medicine',
-        patient_peer_id: d.patient_peer_id || '',
-        status: d.status || 'OPEN',
-        assigned_doctor_name: d.assigned_doctor_name,
-        created_at: d.created_at || new Date().toISOString()
-      }));
-      saveLocalComplaints(merged);
-      if (specialization) {
-        onUpdate(merged.filter(c => c.specialization_needed === specialization && c.status !== 'RESOLVED'));
-      } else {
-        onUpdate(merged);
+  // 1. Listen to Global Real-Time Cloud SSE Stream
+  let sse: EventSource | null = null;
+  try {
+    sse = new EventSource(`https://ntfy.sh/${RELAY_TOPIC}/sse`);
+    sse.onmessage = (event) => {
+      try {
+        const raw = JSON.parse(event.data);
+        const parsed = typeof raw.message === 'string' ? JSON.parse(raw.message) : (raw.message || raw);
+
+        if (parsed.type === 'NEW_COMPLAINT' && parsed.complaint) {
+          const existing = getLocalComplaints();
+          const updated = [parsed.complaint, ...existing.filter(c => String(c.id) !== String(parsed.complaint.id))];
+          saveLocalComplaints(updated);
+          refresh();
+        } else if (parsed.type === 'STATUS_UPDATE') {
+          const existing = getLocalComplaints();
+          const updated = existing.map(c => {
+            if (String(c.id) === String(parsed.complaintId)) {
+              return { ...c, status: parsed.status, ...(parsed.doctorName ? { assigned_doctor_name: parsed.doctorName } : {}) };
+            }
+            return c;
+          });
+          saveLocalComplaints(updated);
+          refresh();
+        }
+      } catch (err) {
+        // ignore parse notices
       }
-    }
-  });
-
-  // 2. BroadcastChannel cross-tab listener
-  const handleBcMessage = (event: MessageEvent) => {
-    if (event.data?.type === 'SYNC_COMPLAINTS' && Array.isArray(event.data.list)) {
-      const list = event.data.list;
-      if (specialization) {
-        onUpdate(list.filter((c: PatientComplaintItem) => c.specialization_needed === specialization && c.status !== 'RESOLVED'));
-      } else {
-        onUpdate(list);
-      }
-    }
-  };
-
-  // 3. Custom P2P Event Listener
-  const handleP2PEvent = (e: any) => {
-    refresh();
-  };
-  window.addEventListener('medflow_p2p_complaint', handleP2PEvent);
-
-  if (channel) channel.addEventListener('message', handleBcMessage);
+    };
+  } catch {}
 
   refresh();
-  const interval = setInterval(refresh, 3000);
+  const interval = setInterval(refresh, 2500);
 
   return () => {
-    unsubFirestore();
-    if (channel) channel.removeEventListener('message', handleBcMessage);
-    window.removeEventListener('medflow_p2p_complaint', handleP2PEvent);
+    if (sse) sse.close();
     clearInterval(interval);
   };
 }
