@@ -253,6 +253,7 @@ export function App() {
             initialTab="search"
             userToken={localStorage.getItem('medflow_token') || undefined}
             myPeerId={myPeerId}
+            currentUserName={currentUser?.full_name}
             onCallDoctor={(targetPeerId, doctorName, complaintId) => {
               setCallerName(doctorName);
               callPeer(targetPeerId, complaintId, currentUser?.full_name || 'Patient');

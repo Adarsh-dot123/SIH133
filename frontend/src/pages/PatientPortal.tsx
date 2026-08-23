@@ -71,10 +71,11 @@ interface PatientPortalProps {
   initialTab?: string;
   userToken?: string;
   myPeerId?: string | null;
+  currentUserName?: string;
   onCallDoctor?: (targetPeerId: string, doctorName: string, complaintId: number | string) => void;
 }
 
-export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search', userToken, myPeerId, onCallDoctor }) => {
+export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'search', userToken, myPeerId, currentUserName, onCallDoctor }) => {
   const { t, language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'search' | 'referral' | 'consultation'>(
     initialTab === 'referral' ? 'referral' : initialTab === 'consultation' ? 'consultation' : 'search'
@@ -96,7 +97,11 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ initialTab = 'sear
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Referral Request State
-  const [patientName, setPatientName] = useState<string>('Ramesh Sundaram');
+  const [patientName, setPatientName] = useState<string>(currentUserName || 'Ramesh Kumar');
+
+  useEffect(() => {
+    if (currentUserName) setPatientName(currentUserName);
+  }, [currentUserName]);
   const [patientAge, setPatientAge] = useState<number>(56);
   const [refSpecialty, setRefSpecialty] = useState<string>('Cardiology');
   const [refBedType, setRefBedType] = useState<string>('ICU');
