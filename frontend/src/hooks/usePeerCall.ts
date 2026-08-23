@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback } from 'react';
 
 export interface CallInfo {
   peerId: string;
@@ -30,7 +30,7 @@ function createFallbackStream(): MediaStream {
     ctx.fillRect(0, 0, 640, 480);
     ctx.fillStyle = '#0d9488';
     ctx.font = 'bold 28px sans-serif';
-    ctx.fillText('MedFlow Live Video Feed', 150, 240);
+    ctx.fillText('MedFlow Live Video Consultation', 100, 240);
   }
   const stream = (canvas as any).captureStream ? (canvas as any).captureStream(15) : new MediaStream();
   try {
@@ -138,7 +138,7 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
       });
 
       peer.on('error', (err: any) => {
-        console.warn('[PeerJS] Error notice:', err.type || err);
+        console.warn('[PeerJS] Notice:', err.type || err);
         if (err.type === 'unavailable-id' && attempt < 3) {
           createPeerInstance(userId, attempt + 1);
         }
@@ -147,8 +147,15 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
   }, [onIncomingCall]);
 
   const initPeer = useCallback((userId: string) => {
-    if (peerRef.current && !peerRef.current.destroyed) return;
-    currentUserIdRef.current = userId;
+    const cleanUser = userId.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const targetId = `medflow-${cleanUser}`;
+    if (peerRef.current && !peerRef.current.destroyed && currentUserIdRef.current === targetId) {
+      return;
+    }
+    if (peerRef.current && !peerRef.current.destroyed) {
+      try { peerRef.current.destroy(); } catch {}
+    }
+    currentUserIdRef.current = targetId;
     createPeerInstance(userId);
   }, [createPeerInstance]);
 
