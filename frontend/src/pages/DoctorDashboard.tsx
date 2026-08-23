@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Stethoscope, Phone, Clock, CheckCircle, RefreshCw, User2, Activity } from 'lucide-react';
-import { subscribeToComplaints, updateComplaintState, getLocalComplaints, PatientComplaintItem } from '../services/complaintsService';
+import { subscribeToComplaints, updateComplaintState, fetchLiveComplaints, PatientComplaintItem } from '../services/complaintsService';
 
 interface DoctorDashboardProps {
   doctorName: string;
@@ -78,11 +78,11 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
             Live Consultation Queue — {specialization}
           </h3>
           <button
-            onClick={() => {
+            onClick={async () => {
               setLoading(true);
-              const list = getLocalComplaints();
-              setComplaints(list.filter(c => (c.specialization_needed === specialization || specialization === 'ALL') && c.status !== 'RESOLVED'));
-              setTimeout(() => setLoading(false), 400);
+              const list = await fetchLiveComplaints(specialization);
+              setComplaints(list);
+              setLoading(false);
             }}
             className="btn btn-secondary btn-sm"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '6px 14px', cursor: 'pointer', background: '#f1f5f9', border: '1px solid #cbd5e1' }}

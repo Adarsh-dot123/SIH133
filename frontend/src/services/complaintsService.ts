@@ -13,6 +13,8 @@ export interface PatientComplaintItem {
 }
 
 const STORAGE_KEY = 'medflow_shared_complaints';
+const CLOUD_SYNC_ENDPOINT = 'https://api.restful-api.dev/objects/ff8081819ff5b11001a02d20a9a47e08';
+
 const channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
   ? new BroadcastChannel('medflow_complaints_channel')
   : null;
@@ -46,6 +48,35 @@ export function saveLocalComplaints(list: PatientComplaintItem[]) {
   } catch {}
 }
 
+export async function fetchFromCloud(): Promise<PatientComplaintItem[]> {
+  try {
+    const res = await fetch(`${CLOUD_SYNC_ENDPOINT}?_t=${Date.now()}`);
+    if (!res.ok) return [];
+    const json = await res.json();
+    if (json && json.data && Array.isArray(json.data.items)) {
+      return json.data.items;
+    }
+  } catch (err) {
+    console.warn("Cloud sync fetch notice:", err);
+  }
+  return [];
+}
+
+export async function pushToCloud(items: PatientComplaintItem[]): Promise<void> {
+  try {
+    await fetch(CLOUD_SYNC_ENDPOINT, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'medflow_complaints',
+        data: { items: items.slice(0, 50) }
+      })
+    });
+  } catch (err) {
+    console.warn("Cloud sync push notice:", err);
+  }
+}
+
 export async function submitNewComplaint(complaint: Omit<PatientComplaintItem, 'id' | 'created_at' | 'status'> & { id?: number | string; status?: string }): Promise<PatientComplaintItem> {
   const newId = complaint.id || Date.now();
   const docInfo = getDoctorForSpecialty(complaint.specialization_needed);
@@ -59,46 +90,77 @@ export async function submitNewComplaint(complaint: Omit<PatientComplaintItem, '
     created_at: new Date().toISOString()
   };
 
-  const existing = getLocalComplaints();
-  const updated = [fullItem, ...existing.filter(c => String(c.id) !== String(newId))];
+  // 1. Fetch latest remote array first so we don't overwrite other devices
+  const remote = await fetchFromCloud();
+  const base = remote.length > 0 ? remote : getLocalComplaints();
+  const updated = [fullItem, ...base.filter(c => String(c.id) !== String(newId))];
+
+  // 2. Save locally and to Global Cloud
   saveLocalComplaints(updated);
+  await pushToCloud(updated);
 
   return fullItem;
 }
 
 export async function updateComplaintState(complaintId: number | string, status: string, doctorName?: string) {
-  const existing = getLocalComplaints();
-  const updated = existing.map(c => {
+  const remote = await fetchFromCloud();
+  const base = remote.length > 0 ? remote : getLocalComplaints();
+
+  const updated = base.map(c => {
     if (String(c.id) === String(complaintId)) {
       return { ...c, status, ...(doctorName ? { assigned_doctor_name: doctorName } : {}) };
     }
     return c;
   });
+
   saveLocalComplaints(updated);
+  await pushToCloud(updated);
+}
+
+export async function fetchLiveComplaints(specialization: string | null): Promise<PatientComplaintItem[]> {
+  const cloudList = await fetchFromCloud();
+  const list = cloudList.length > 0 ? cloudList : getLocalComplaints();
+  saveLocalComplaints(list);
+
+  if (specialization) {
+    return list.filter(c => (c.specialization_needed === specialization || specialization === 'ALL') && c.status !== 'RESOLVED');
+  }
+  return list;
 }
 
 export function subscribeToComplaints(
   specialization: string | null,
   onUpdate: (complaints: PatientComplaintItem[]) => void
 ): () => void {
-  const refresh = () => {
-    const list = getLocalComplaints();
-    if (specialization) {
-      onUpdate(list.filter(c => (c.specialization_needed === specialization || specialization === 'ALL') && c.status !== 'RESOLVED'));
-    } else {
-      onUpdate(list);
-    }
+  const refresh = async () => {
+    const list = await fetchLiveComplaints(specialization);
+    onUpdate(list);
   };
 
   const handleMessage = (e: MessageEvent) => {
     if (e.data?.type === 'SYNC_COMPLAINTS') {
-      refresh();
+      const list = getLocalComplaints();
+      if (specialization) {
+        onUpdate(list.filter(c => (c.specialization_needed === specialization || specialization === 'ALL') && c.status !== 'RESOLVED'));
+      } else {
+        onUpdate(list);
+      }
     }
   };
 
   if (channel) channel.addEventListener('message', handleMessage);
+  
+  // Instant initial load
+  const initialLocal = getLocalComplaints();
+  if (specialization) {
+    onUpdate(initialLocal.filter(c => (c.specialization_needed === specialization || specialization === 'ALL') && c.status !== 'RESOLVED'));
+  } else {
+    onUpdate(initialLocal);
+  }
+
+  // Live cloud sync
   refresh();
-  const interval = setInterval(refresh, 2000);
+  const interval = setInterval(refresh, 2500);
 
   return () => {
     if (channel) channel.removeEventListener('message', handleMessage);
