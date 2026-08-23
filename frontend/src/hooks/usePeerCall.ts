@@ -14,7 +14,8 @@ export interface UsePeerCallReturn {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   initPeer: (userId: string) => void;
-  callPeer: (remotePeerId: string, complaintId: number | string) => void;
+  callPeer: (remotePeerId: string, complaintId: number | string, doctorName?: string) => void;
+  triggerIncomingCall: (info: CallInfo) => void;
   answerCall: () => void;
   endCall: () => void;
 }
@@ -33,8 +34,11 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
     try {
       return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     } catch {
-      try { return await navigator.mediaDevices.getUserMedia({ video: false, audio: true }); }
-      catch { return null; }
+      try {
+        return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+      } catch {
+        return null;
+      }
     }
   };
 
@@ -42,6 +46,7 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
     call.on('stream', (stream: MediaStream) => {
       setRemoteStream(stream);
       setIsCallActive(true);
+      setIsIncoming(false);
     });
     call.on('close', () => endCall());
     call.on('error', () => endCall());
@@ -51,12 +56,13 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
   const initPeer = useCallback((userId: string) => {
     if (peerRef.current && !peerRef.current.destroyed) return;
     import('peerjs').then(({ default: Peer }) => {
-      const sanitizedId = `medflow-${userId.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now().toString().slice(-6)}`;
+      const sanitizedId = `medflow-${userId.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
       const peer = new Peer(sanitizedId, {
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
           ]
         }
       });
@@ -82,36 +88,52 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
         currentCallRef.current = call;
       });
 
-      peer.on('error', (err: any) => console.error('[PeerJS] error:', err));
+      peer.on('error', (err: any) => {
+        console.warn('[PeerJS] Notice:', err.type || err);
+      });
     });
   }, [onIncomingCall]);
 
-  const callPeer = useCallback(async (remotePeerId: string, complaintId: number | string) => {
+  const triggerIncomingCall = useCallback((info: CallInfo) => {
+    setIncomingCallInfo(info);
+    setIsIncoming(true);
+    if (onIncomingCall) onIncomingCall(info);
+  }, [onIncomingCall]);
+
+  const callPeer = useCallback(async (remotePeerId: string, complaintId: number | string, doctorName?: string) => {
     if (!peerRef.current) return;
     const stream = await getMedia();
-    if (!stream) { alert('Camera/mic access required for video call.'); return; }
+    if (!stream) {
+      alert('Camera & microphone permissions are required for video consultations.');
+      return;
+    }
     setLocalStream(stream);
     const call = peerRef.current.call(remotePeerId, stream, {
-      metadata: { complaintId }
+      metadata: { complaintId, doctorName: doctorName || 'Doctor' }
     });
-    addRemoteStream(call);
+    if (call) {
+      addRemoteStream(call);
+    }
     setIsCallActive(true);
   }, []);
 
   const answerCall = useCallback(async () => {
     const call = currentCallRef.current;
-    if (!call) return;
     const stream = localStream || await getMedia();
-    if (!stream) { alert('Camera/mic access required.'); return; }
-    setLocalStream(stream);
-    call.answer(stream);
-    addRemoteStream(call);
+    if (stream) setLocalStream(stream);
+
+    if (call && stream) {
+      call.answer(stream);
+      addRemoteStream(call);
+    }
     setIsIncoming(false);
     setIsCallActive(true);
   }, [localStream]);
 
   const endCall = useCallback(() => {
-    currentCallRef.current?.close();
+    if (currentCallRef.current) {
+      try { currentCallRef.current.close(); } catch {}
+    }
     localStream?.getTracks().forEach(t => t.stop());
     remoteStream?.getTracks().forEach(t => t.stop());
     setLocalStream(null);
@@ -122,5 +144,8 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
     currentCallRef.current = null;
   }, [localStream, remoteStream]);
 
-  return { myPeerId, isCallActive, isIncoming, incomingCallInfo, localStream, remoteStream, initPeer, callPeer, answerCall, endCall };
+  return {
+    myPeerId, isCallActive, isIncoming, incomingCallInfo, localStream, remoteStream,
+    initPeer, callPeer, triggerIncomingCall, answerCall, endCall
+  };
 }

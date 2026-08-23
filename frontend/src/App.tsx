@@ -23,6 +23,7 @@ import { HospitalAdminModal } from './components/HospitalAdminModal';
 import { DoctorDashboard } from './pages/DoctorDashboard';
 import { VideoCallModal } from './components/VideoCallModal';
 import { usePeerCall } from './hooks/usePeerCall';
+import { subscribeToComplaints } from './services/complaintsService';
 
 // Strict Role-Based Access Control mapping
 const ROLE_ALLOWED_TABS: Record<UserRole, string[]> = {
@@ -52,7 +53,7 @@ export function App() {
 
   const {
     myPeerId, isCallActive, isIncoming, incomingCallInfo, localStream, remoteStream,
-    initPeer, callPeer, answerCall, endCall
+    initPeer, callPeer, triggerIncomingCall, answerCall, endCall
   } = usePeerCall((info) => {
     setCallerName(info.doctorName || 'Doctor');
   });
@@ -63,6 +64,25 @@ export function App() {
       initPeer(currentUser.email);
     }
   }, [currentUser, initPeer]);
+
+  // Listen for incoming consultation calls for the patient
+  useEffect(() => {
+    if (currentRole === 'PATIENT') {
+      const unsub = subscribeToComplaints(null, (list) => {
+        const inCall = list.find(c => c.status === 'IN_CALL');
+        if (inCall && !isCallActive && !isIncoming) {
+          const docName = inCall.assigned_doctor_name || 'Dr. Arun Sharma (Cardiology)';
+          setCallerName(docName);
+          triggerIncomingCall({
+            peerId: inCall.patient_peer_id || 'doctor',
+            doctorName: docName,
+            complaintId: inCall.id
+          });
+        }
+      });
+      return unsub;
+    }
+  }, [currentRole, isCallActive, isIncoming, triggerIncomingCall]);
 
   // Check existing auth token and Firebase Auth on boot
   useEffect(() => {
