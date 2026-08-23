@@ -23,7 +23,7 @@ import { HospitalAdminModal } from './components/HospitalAdminModal';
 import { DoctorDashboard } from './pages/DoctorDashboard';
 import { VideoCallModal } from './components/VideoCallModal';
 import { usePeerCall } from './hooks/usePeerCall';
-import { subscribeToComplaints } from './services/complaintsService';
+import { updateComplaintState } from './services/complaintsService';
 
 // Strict Role-Based Access Control mapping
 const ROLE_ALLOWED_TABS: Record<UserRole, string[]> = {
@@ -65,24 +65,13 @@ export function App() {
     }
   }, [currentUser, initPeer]);
 
-  // Listen for incoming consultation calls for the patient
-  useEffect(() => {
-    if (currentRole === 'PATIENT') {
-      const unsub = subscribeToComplaints(null, (list) => {
-        const inCall = list.find(c => c.status === 'IN_CALL');
-        if (inCall && !isCallActive && !isIncoming) {
-          const docName = inCall.assigned_doctor_name || 'Dr. Arun Sharma (Cardiology)';
-          setCallerName(docName);
-          triggerIncomingCall({
-            peerId: inCall.patient_peer_id || 'doctor',
-            doctorName: docName,
-            complaintId: inCall.id
-          });
-        }
-      });
-      return unsub;
+  // Handle declining or ending a call
+  const handleDeclineOrEndCall = () => {
+    if (incomingCallInfo?.complaintId) {
+      updateComplaintState(incomingCallInfo.complaintId, 'RESOLVED');
     }
-  }, [currentRole, isCallActive, isIncoming, triggerIncomingCall]);
+    endCall();
+  };
 
   // Check existing auth token and Firebase Auth on boot
   useEffect(() => {
@@ -305,7 +294,7 @@ export function App() {
         remoteStream={remoteStream}
         callerName={callerName}
         onAnswer={answerCall}
-        onEnd={endCall}
+        onEnd={handleDeclineOrEndCall}
       />
 
       {/* Real-time WebSocket Toasts */}
