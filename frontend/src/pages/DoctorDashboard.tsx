@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Stethoscope, Phone, Clock, CheckCircle, RefreshCw, User2, Activity } from 'lucide-react';
+import { Stethoscope, Phone, Clock, CheckCircle, RefreshCw, User2, Activity, Filter } from 'lucide-react';
 import { subscribeToComplaints, updateComplaintState, fetchLiveComplaints, PatientComplaintItem } from '../services/complaintsService';
 
 interface DoctorDashboardProps {
@@ -13,18 +13,30 @@ interface DoctorDashboardProps {
 export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
   doctorName, specialization, myPeerId, onCallPatient
 }) => {
+  const [activeFilter, setActiveFilter] = useState<string>(specialization || 'ALL');
   const [complaints, setComplaints] = useState<PatientComplaintItem[]>([]);
   const [isAvailable, setIsAvailable] = useState(true);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    setActiveFilter(specialization || 'ALL');
+  }, [specialization]);
+
+  useEffect(() => {
     setLoading(true);
-    const unsub = subscribeToComplaints(specialization, (list) => {
+    const unsub = subscribeToComplaints(activeFilter, (list) => {
       setComplaints(list);
       setLoading(false);
     });
     return unsub;
-  }, [specialization]);
+  }, [activeFilter]);
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    const list = await fetchLiveComplaints(activeFilter);
+    setComplaints(list);
+    setLoading(false);
+  };
 
   const handleCall = async (complaint: PatientComplaintItem) => {
     if (!myPeerId) {
@@ -52,8 +64,8 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
               <Stethoscope size={24} />
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0 }}>{doctorName}</h2>
             </div>
-            <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Specialization: <strong>{specialization}</strong></div>
-            <div style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '4px' }}>Peer ID: {myPeerId ? myPeerId : 'Connecting to ICR...'}</div>
+            <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Primary Department: <strong>{specialization}</strong></div>
+            <div style={{ fontSize: '0.8rem', opacity: 0.75, marginTop: '4px' }}>WebRTC Peer ID: <code>{myPeerId ? myPeerId : 'Connecting...'}</code></div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
             <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '12px', padding: '8px 16px', textAlign: 'center' }}>
@@ -72,18 +84,29 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
 
       {/* Complaints Queue */}
       <div className="card" style={{ padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Activity size={18} style={{ color: '#0d9488' }} />
-            Live Consultation Queue — {specialization}
-          </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Activity size={18} style={{ color: '#0d9488' }} />
+              Universal Consultation Queue
+            </h3>
+            <select
+              value={activeFilter}
+              onChange={e => setActiveFilter(e.target.value)}
+              style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: '#fff' }}
+            >
+              <option value={specialization}>Department: {specialization}</option>
+              <option value="ALL">🌐 All Hospital Departments</option>
+              <option value="Cardiology">Cardiology</option>
+              <option value="Pediatrics">Pediatrics</option>
+              <option value="Neurology">Neurology</option>
+              <option value="Pulmonology">Pulmonology</option>
+              <option value="Nephrology">Nephrology</option>
+            </select>
+          </div>
+
           <button
-            onClick={async () => {
-              setLoading(true);
-              const list = await fetchLiveComplaints(specialization);
-              setComplaints(list);
-              setLoading(false);
-            }}
+            onClick={handleRefresh}
             className="btn btn-secondary btn-sm"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '6px 14px', cursor: 'pointer', background: '#f1f5f9', border: '1px solid #cbd5e1' }}
           >
@@ -95,8 +118,8 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
         {complaints.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', background: '#f8fafc', borderRadius: '12px', color: '#64748b' }}>
             <CheckCircle size={32} style={{ margin: '0 auto 8px', color: '#0d9488' }} />
-            <div style={{ fontWeight: 700 }}>No open complaints in {specialization} queue</div>
-            <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>Patients submitting symptoms will appear here instantly.</div>
+            <div style={{ fontWeight: 700 }}>No open complaints in queue</div>
+            <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>Patients submitting symptoms from any device will appear here instantly.</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -106,10 +129,14 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                       <User2 size={14} style={{ color: '#64748b' }} />
-                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0d9488' }}>{c.patient_name}</span>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0d9488' }}>{c.patient_name}</span>
+                      <span style={{ fontSize: '0.72rem', color: '#64748b' }}>({c.specialization_needed})</span>
                     </div>
                     <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>{c.title}</div>
                     {c.description && <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '4px', lineHeight: 1.4 }}>{c.description}</div>}
+                    {c.assigned_doctor_name && (
+                      <div style={{ fontSize: '0.75rem', color: '#334155', marginTop: '4px' }}>Requested Doctor: <strong>{c.assigned_doctor_name}</strong></div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap' }}>
                     <Clock size={12} />{new Date(c.created_at).toLocaleTimeString('en-IN')}
@@ -120,23 +147,23 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({
                     <button
                       onClick={() => handleCall(c)}
                       className="btn btn-primary btn-sm"
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px', fontWeight: 700 }}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px', fontWeight: 700, fontSize: '0.88rem' }}
                     >
-                      <Phone size={14} /> 📹 Call Patient
+                      <Phone size={16} /> 📹 Call Patient ({c.patient_name})
                     </button>
                   )}
                   {(c.status === 'OPEN' || c.status === 'IN_CALL') && (
                     <button
                       onClick={() => handleResolve(c.id)}
                       className="btn btn-secondary btn-sm"
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px' }}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px' }}
                     >
-                      <CheckCircle size={14} /> Mark Resolved
+                      <CheckCircle size={16} /> Mark Resolved
                     </button>
                   )}
                   {c.status === 'IN_CALL' && (
-                    <div style={{ flex: 1, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '6px 10px', fontSize: '0.75rem', color: '#059669', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                      <Activity size={12} /> Call in progress
+                    <div style={{ flex: 1, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '8px 10px', fontSize: '0.8rem', color: '#059669', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <Activity size={14} /> Call in progress
                     </div>
                   )}
                 </div>
