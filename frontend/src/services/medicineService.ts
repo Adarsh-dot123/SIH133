@@ -13,7 +13,7 @@ export interface MedicineStock {
   vehicle?: string;
 }
 
-const GOOGLE_SHEET_GVIZ_URL = "https://docs.google.com/spreadsheets/d/1tKNiTPW1_w54FWtRQZ7hg3Yww35LZaEpRBeyH1ZCjrw/gviz/tq?tqx=out:csv&gid=1397067521";
+const GOOGLE_SHEET_GVIZ_URL = "https://docs.google.com/spreadsheets/d/1tKNiTPW1_w54FWtRQZ7hg3Yww35LZaEpRBeyH1ZCjrw/gviz/tq?sheet=Sheet1";
 const API = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
 const DISPATCHED_STORAGE_KEY = 'medflow_dispatched_overrides';
 
@@ -87,67 +87,73 @@ export const DEFAULT_MEDICINES: MedicineStock[] = DEFAULT_HOSPITALS.flatMap(h =>
   }));
 });
 
+async function fetchFromGoogleSheetGviz(): Promise<MedicineStock[]> {
+  try {
+    const res = await fetch(`${GOOGLE_SHEET_GVIZ_URL}&_t=${Date.now()}`);
+    if (!res.ok) return [];
+    const text = await res.text();
+    const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/);
+    if (!match || !match[1]) return [];
+    const json = JSON.parse(match[1]);
+    const cols = (json.table?.cols || []).map((c: any) => (c.label || c.id || '').toLowerCase());
+    const rows = json.table?.rows || [];
+
+    const result: MedicineStock[] = [];
+    const idIdx = cols.indexOf('id');
+    const nameIdx = cols.indexOf('name');
+
+    rows.forEach((r: any, i: number) => {
+      const c = r.c || [];
+      const rawId = idIdx !== -1 && c[idIdx] ? c[idIdx].v : i + 1;
+      const rawName = nameIdx !== -1 && c[nameIdx] ? c[nameIdx].v : `Hospital ${rawId}`;
+      const hospId = Number(rawId) || (i + 1);
+      const facilityName = String(rawName || DEFAULT_HOSPITALS.find(dh => dh.id === hospId)?.name || `Hospital ${hospId}`);
+
+      for (const [colKey, conf] of Object.entries(MED_CONFIG)) {
+        const colIdx = cols.indexOf(colKey.toLowerCase());
+        if (colIdx !== -1 && c[colIdx]) {
+          const val = c[colIdx].v;
+          const stockVal = val === null || val === undefined ? 0 : Math.round(Number(val) || 0);
+          result.push({
+            id: `${hospId}_${conf.id}`,
+            med_id: conf.id,
+            hospital_id: hospId,
+            name: conf.name,
+            category: conf.category,
+            stockLevel: isNaN(stockVal) ? 0 : Math.max(0, Math.min(100, stockVal)),
+            burnRate: conf.burnRate,
+            minThreshold: conf.minThreshold,
+            facility: facilityName,
+            isRestocking: false,
+            restockEta: 0
+          });
+        }
+      }
+    });
+    return result;
+  } catch (err) {
+    console.warn("GVIZ JSON fetch notice:", err);
+    return [];
+  }
+}
+
 export async function fetchLiveMedicines(): Promise<MedicineStock[]> {
   let list: MedicineStock[] = [];
 
-  // 1. Fetch live from Backend SQLite/Firestore sync endpoint first
-  try {
-    const res = await fetch(`${API}/api/hospitals/medicines/all`);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        list = data;
-      }
-    }
-  } catch (err) {
-    console.warn("Backend medicines fetch failed, trying direct Google Sheets gviz:", err);
+  // 1. Fetch live directly from Google Sheet GVIZ API first (works globally everywhere without CORS restrictions)
+  const gvizList = await fetchFromGoogleSheetGviz();
+  if (gvizList.length > 0) {
+    list = gvizList;
   }
 
-  // 2. Direct Google Sheet gviz CSV stream fallback
+  // 2. If GVIZ had an issue, fallback to backend SQLite API if on localhost
   if (list.length === 0) {
     try {
-      const res = await fetch(GOOGLE_SHEET_GVIZ_URL);
+      const res = await fetch(`${API}/api/hospitals/medicines/all`);
       if (res.ok) {
-        const csvText = await res.text();
-        const rows = parseCSV(csvText);
-        if (rows.length > 1) {
-          const headers = rows[0].map(h => cleanCell(h).toLowerCase());
-          const idIdx = headers.indexOf("id");
-          const nameIdx = headers.indexOf("name");
-
-          const result: MedicineStock[] = [];
-
-          for (let i = 1; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row || row.length <= 1) continue;
-            
-            const rawId = idIdx !== -1 ? cleanCell(row[idIdx]) : "";
-            const rawName = nameIdx !== -1 ? cleanCell(row[nameIdx]) : "";
-            const hospId = Number(rawId) || i;
-            const facilityName = rawName || DEFAULT_HOSPITALS.find(dh => dh.id === hospId)?.name || `Hospital ${hospId}`;
-
-            for (const [colKey, conf] of Object.entries(MED_CONFIG)) {
-              const colIdx = headers.indexOf(colKey);
-              if (colIdx !== -1 && row[colIdx] !== undefined) {
-                const cellVal = cleanCell(row[colIdx]);
-                const stockVal = cellVal === "" ? 0 : Math.round(Number(cellVal) || 0);
-                result.push({
-                  id: `${hospId}_${conf.id}`,
-                  med_id: conf.id,
-                  hospital_id: hospId,
-                  name: conf.name,
-                  category: conf.category,
-                  stockLevel: isNaN(stockVal) ? 0 : Math.max(0, Math.min(100, stockVal)),
-                  burnRate: conf.burnRate,
-                  minThreshold: conf.minThreshold,
-                  facility: facilityName,
-                  isRestocking: false,
-                  restockEta: 0
-                });
-              }
-            }
-          }
-          if (result.length > 0) list = result;
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          list = data;
         }
       }
     } catch {}
@@ -157,7 +163,7 @@ export async function fetchLiveMedicines(): Promise<MedicineStock[]> {
     list = DEFAULT_MEDICINES;
   }
 
-  // 3. Apply ONLY active moving truck delivery overrides (restock countdowns)
+  // 3. Apply active moving truck delivery overrides
   const overrides = getDispatchedOverrides();
   return list.map(m => {
     const ov = overrides[m.id];
@@ -165,32 +171,5 @@ export async function fetchLiveMedicines(): Promise<MedicineStock[]> {
       return { ...m, isRestocking: true, restockEta: ov.restockEta, vehicle: ov.vehicle };
     }
     return m;
-  });
-}
-
-function cleanCell(str: string): string {
-  if (!str) return "";
-  return str.replace(/^["']|["']$/g, '').trim();
-}
-
-function parseCSV(text: string): string[][] {
-  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-  return lines.map(line => {
-    const row: string[] = [];
-    let inQuotes = false;
-    let current = '';
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        row.push(current);
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    row.push(current);
-    return row;
   });
 }

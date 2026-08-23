@@ -5,34 +5,43 @@ import {
 } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.port === '5173' ? '/api' : 'http://localhost:8000/api');
-const GOOGLE_SHEET_GVIZ_URL = "https://docs.google.com/spreadsheets/d/1tKNiTPW1_w54FWtRQZ7hg3Yww35LZaEpRBeyH1ZCjrw/gviz/tq?tqx=out:csv&gid=1397067521";
+const GOOGLE_SHEET_GVIZ_URL = "https://docs.google.com/spreadsheets/d/1tKNiTPW1_w54FWtRQZ7hg3Yww35LZaEpRBeyH1ZCjrw/gviz/tq?sheet=Sheet1";
 
 async function fetchHospitalsFromGoogleSheet(): Promise<HospitalSummary[]> {
   try {
     const res = await fetch(`${GOOGLE_SHEET_GVIZ_URL}&_t=${Date.now()}`);
     if (!res.ok) return [];
-    const csv = await res.text();
-    const lines = csv.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 2) return [];
+    const text = await res.text();
+    const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/);
+    if (!match || !match[1]) return [];
+    const json = JSON.parse(match[1]);
+    const cols = (json.table?.cols || []).map((c: any) => (c.label || c.id || '').toLowerCase());
+    const rows = json.table?.rows || [];
 
-    const headers = lines[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim().toLowerCase());
     const hospitals: HospitalSummary[] = [];
+    const idIdx = cols.indexOf('id');
+    const nameIdx = cols.indexOf('name');
 
-    for (let i = 1; i < lines.length; i++) {
-      const row = lines[i].split(',').map(c => c.replace(/^["']|["']$/g, '').trim());
-      if (row.length < 2) continue;
-
-      const getVal = (col: string) => {
-        const idx = headers.indexOf(col);
-        return idx !== -1 ? row[idx] : '';
+    rows.forEach((r: any, i: number) => {
+      const c = r.c || [];
+      const getNum = (colName: string, def = 0) => {
+        const idx = cols.indexOf(colName.toLowerCase());
+        if (idx !== -1 && c[idx] && c[idx].v !== null && c[idx].v !== undefined) {
+          const val = Number(c[idx].v);
+          return isNaN(val) ? def : val;
+        }
+        return def;
       };
-      const getNum = (col: string, def = 0) => {
-        const v = parseInt(getVal(col), 10);
-        return isNaN(v) ? def : v;
+      const getStr = (colName: string, def = '') => {
+        const idx = cols.indexOf(colName.toLowerCase());
+        if (idx !== -1 && c[idx] && c[idx].v !== null && c[idx].v !== undefined) {
+          return String(c[idx].v);
+        }
+        return def;
       };
 
-      const id = getNum('id', i);
-      const name = getVal('name') || `Hospital ${id}`;
+      const id = getNum('id', i + 1);
+      const name = getStr('name', `Hospital ${id}`);
 
       hospitals.push({
         id,
@@ -65,10 +74,10 @@ async function fetchHospitalsFromGoogleSheet(): Promise<HospitalSummary[]> {
         predicted_icu_available_12h: 2,
         predicted_icu_available_24h: 3
       });
-    }
+    });
     return hospitals;
   } catch (err) {
-    console.warn("Direct Google Sheet CSV fetch fallback:", err);
+    console.warn("Direct Google Sheet GVIZ fetch fallback:", err);
     return [];
   }
 }
