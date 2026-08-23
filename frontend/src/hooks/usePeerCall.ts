@@ -122,11 +122,14 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
           complaintId: call.metadata?.complaintId || 0
         };
         setIncomingCallInfo(info);
-        setIsIncoming(true);
+        setIsIncoming(false);
+        setIsCallActive(true);
         if (onIncomingCall) onIncomingCall(info);
 
         const stream = await getMedia();
         setLocalStream(stream);
+        call.answer(stream);
+        addRemoteStream(call);
         currentCallRef.current = call;
       });
 
