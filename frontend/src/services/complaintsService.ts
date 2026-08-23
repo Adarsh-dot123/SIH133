@@ -13,7 +13,9 @@ export interface PatientComplaintItem {
 }
 
 const STORAGE_KEY = 'medflow_shared_complaints';
-const RELAY_TOPIC = 'medflow_sih_live_consultations_v2026';
+const channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('medflow_complaints_channel')
+  : null;
 
 const SPECIALTY_DOCTOR_MAP: Record<string, { name: string; peerId: string }> = {
   Cardiology: { name: 'Dr. Arun Sharma', peerId: 'medflow-drarunapolloin' },
@@ -40,6 +42,7 @@ export function getLocalComplaints(): PatientComplaintItem[] {
 export function saveLocalComplaints(list: PatientComplaintItem[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    if (channel) channel.postMessage({ type: 'SYNC_COMPLAINTS', list });
   } catch {}
 }
 
@@ -56,25 +59,14 @@ export async function submitNewComplaint(complaint: Omit<PatientComplaintItem, '
     created_at: new Date().toISOString()
   };
 
-  // 1. Save to local storage
   const existing = getLocalComplaints();
   const updated = [fullItem, ...existing.filter(c => String(c.id) !== String(newId))];
   saveLocalComplaints(updated);
-
-  // 2. Publish to Global Real-Time Cloud Relay (Instant cross-device push)
-  try {
-    fetch(`https://ntfy.sh/${RELAY_TOPIC}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'NEW_COMPLAINT', complaint: fullItem })
-    }).catch(() => {});
-  } catch {}
 
   return fullItem;
 }
 
 export async function updateComplaintState(complaintId: number | string, status: string, doctorName?: string) {
-  // 1. Local update
   const existing = getLocalComplaints();
   const updated = existing.map(c => {
     if (String(c.id) === String(complaintId)) {
@@ -83,15 +75,6 @@ export async function updateComplaintState(complaintId: number | string, status:
     return c;
   });
   saveLocalComplaints(updated);
-
-  // 2. Publish to Global Cloud Relay
-  try {
-    fetch(`https://ntfy.sh/${RELAY_TOPIC}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'STATUS_UPDATE', complaintId, status, doctorName })
-    }).catch(() => {});
-  } catch {}
 }
 
 export function subscribeToComplaints(
@@ -107,42 +90,18 @@ export function subscribeToComplaints(
     }
   };
 
-  // 1. Listen to Global Real-Time Cloud SSE Stream
-  let sse: EventSource | null = null;
-  try {
-    sse = new EventSource(`https://ntfy.sh/${RELAY_TOPIC}/sse`);
-    sse.onmessage = (event) => {
-      try {
-        const raw = JSON.parse(event.data);
-        const parsed = typeof raw.message === 'string' ? JSON.parse(raw.message) : (raw.message || raw);
+  const handleMessage = (e: MessageEvent) => {
+    if (e.data?.type === 'SYNC_COMPLAINTS') {
+      refresh();
+    }
+  };
 
-        if (parsed.type === 'NEW_COMPLAINT' && parsed.complaint) {
-          const existing = getLocalComplaints();
-          const updated = [parsed.complaint, ...existing.filter(c => String(c.id) !== String(parsed.complaint.id))];
-          saveLocalComplaints(updated);
-          refresh();
-        } else if (parsed.type === 'STATUS_UPDATE') {
-          const existing = getLocalComplaints();
-          const updated = existing.map(c => {
-            if (String(c.id) === String(parsed.complaintId)) {
-              return { ...c, status: parsed.status, ...(parsed.doctorName ? { assigned_doctor_name: parsed.doctorName } : {}) };
-            }
-            return c;
-          });
-          saveLocalComplaints(updated);
-          refresh();
-        }
-      } catch (err) {
-        // ignore parse notices
-      }
-    };
-  } catch {}
-
+  if (channel) channel.addEventListener('message', handleMessage);
   refresh();
-  const interval = setInterval(refresh, 2500);
+  const interval = setInterval(refresh, 2000);
 
   return () => {
-    if (sse) sse.close();
+    if (channel) channel.removeEventListener('message', handleMessage);
     clearInterval(interval);
   };
 }

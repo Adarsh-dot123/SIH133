@@ -287,15 +287,17 @@ export function App() {
       </main>
 
       {/* ICR WebRTC Video Call Overlay */}
-      <VideoCallModal
-        isActive={isCallActive}
-        isIncoming={isIncoming}
-        localStream={localStream}
-        remoteStream={remoteStream}
-        callerName={callerName}
-        onAnswer={answerCall}
-        onEnd={handleDeclineOrEndCall}
-      />
+      {currentUser && activeTab !== 'login' && (
+        <VideoCallModal
+          isActive={isCallActive}
+          isIncoming={isIncoming}
+          localStream={localStream}
+          remoteStream={remoteStream}
+          callerName={callerName}
+          onAnswer={answerCall}
+          onEnd={handleDeclineOrEndCall}
+        />
+      )}
 
       {/* Real-time WebSocket Toasts */}
       <NotificationToast toasts={toasts} onDismiss={dismissToast} />
