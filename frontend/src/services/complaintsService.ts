@@ -20,6 +20,14 @@ const channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
   ? new BroadcastChannel('medflow_complaints_broadcast')
   : null;
 
+const SPECIALTY_DOCTOR_PEERS: Record<string, string[]> = {
+  Cardiology: ['medflow-drarunapolloin', 'medflow-doctor-cardiology'],
+  Pediatrics: ['medflow-drpriyafortisin', 'medflow-doctor-pediatrics'],
+  Neurology: ['medflow-drrajankamarajin', 'medflow-doctor-neurology'],
+  Pulmonology: ['medflow-drmeenamehruin', 'medflow-doctor-pulmonology'],
+  Nephrology: ['medflow-drvikramgandhiin', 'medflow-doctor-nephrology'],
+};
+
 export function getLocalComplaints(): PatientComplaintItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -36,6 +44,25 @@ export function saveLocalComplaints(list: PatientComplaintItem[]) {
   } catch {}
 }
 
+export async function sendDirectP2PComplaint(complaint: PatientComplaintItem) {
+  const activePeer = (window as any).__medflow_peer;
+  const targetIds = SPECIALTY_DOCTOR_PEERS[complaint.specialization_needed] || ['medflow-drarunapolloin'];
+
+  targetIds.forEach(targetId => {
+    try {
+      if (activePeer && !activePeer.destroyed) {
+        const conn = activePeer.connect(targetId);
+        conn.on('open', () => {
+          conn.send({ type: 'NEW_COMPLAINT', complaint });
+          console.log(`[P2P] Sent complaint directly to ${targetId}`);
+        });
+      }
+    } catch (e) {
+      console.warn(`[P2P] Could not send to ${targetId}:`, e);
+    }
+  });
+}
+
 export async function submitNewComplaint(complaint: Omit<PatientComplaintItem, 'id' | 'created_at' | 'status'> & { id?: number | string; status?: string }): Promise<PatientComplaintItem> {
   const newId = complaint.id || Date.now();
   const fullItem: PatientComplaintItem = {
@@ -50,12 +77,15 @@ export async function submitNewComplaint(complaint: Omit<PatientComplaintItem, '
   const updated = [fullItem, ...existing.filter(c => String(c.id) !== String(newId))];
   saveLocalComplaints(updated);
 
-  // 2. Push to Firestore for cross-device cloud sync
+  // 2. Direct WebRTC P2P push to Doctor's active peer on remote device
+  sendDirectP2PComplaint(fullItem);
+
+  // 3. Push to Firestore for cross-device cloud sync
   try {
     await updateFirestoreDoc('patient_complaints', String(newId), fullItem);
   } catch {}
 
-  // 3. Push to backend SQLite API if reachable
+  // 4. Push to backend SQLite API if reachable
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2000);
@@ -177,6 +207,12 @@ export function subscribeToComplaints(
     }
   };
 
+  // 3. Custom P2P Event Listener
+  const handleP2PEvent = (e: any) => {
+    refresh();
+  };
+  window.addEventListener('medflow_p2p_complaint', handleP2PEvent);
+
   if (channel) channel.addEventListener('message', handleBcMessage);
 
   refresh();
@@ -185,6 +221,7 @@ export function subscribeToComplaints(
   return () => {
     unsubFirestore();
     if (channel) channel.removeEventListener('message', handleBcMessage);
+    window.removeEventListener('medflow_p2p_complaint', handleP2PEvent);
     clearInterval(interval);
   };
 }

@@ -67,10 +67,25 @@ export function usePeerCall(onIncomingCall?: (info: CallInfo) => void): UsePeerC
         }
       });
       peerRef.current = peer;
+      (window as any).__medflow_peer = peer;
 
       peer.on('open', (id: string) => {
         setMyPeerId(id);
         console.log('[PeerJS] Connected with ID:', id);
+      });
+
+      // Data connection listener for real-time P2P cross-device complaints
+      peer.on('connection', (conn: any) => {
+        conn.on('data', (payload: any) => {
+          if (payload && payload.type === 'NEW_COMPLAINT' && payload.complaint) {
+            console.log('[PeerJS P2P] Received complaint from remote device:', payload.complaint);
+            const raw = localStorage.getItem('medflow_shared_complaints');
+            const existing = raw ? JSON.parse(raw) : [];
+            const updated = [payload.complaint, ...existing.filter((c: any) => String(c.id) !== String(payload.complaint.id))];
+            localStorage.setItem('medflow_shared_complaints', JSON.stringify(updated));
+            window.dispatchEvent(new CustomEvent('medflow_p2p_complaint', { detail: payload.complaint }));
+          }
+        });
       });
 
       peer.on('call', async (call: any) => {
