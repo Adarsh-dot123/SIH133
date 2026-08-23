@@ -14,6 +14,7 @@ import {
   doc, 
   onSnapshot, 
   updateDoc, 
+  setDoc,
   addDoc 
 } from 'firebase/firestore';
 
@@ -121,23 +122,26 @@ export const subscribeCollection = (
 
 // Update doc helper
 export const updateFirestoreDoc = async (collectionName: string, docId: string, data: any) => {
-  try {
-    if (!isMock && db) {
-      const docRef = doc(db, collectionName, docId);
-      await updateDoc(docRef, data);
-    }
-  } catch (err: any) {
-    console.warn(`[Firestore] Cloud update notice for ${collectionName}/${docId}:`, err.message);
-  }
-  // Mock store updates
+  // 1. Immediately update local store and notify subscribers without delay
   if (!mockStore[collectionName]) mockStore[collectionName] = {};
   mockStore[collectionName][docId] = {
     ...mockStore[collectionName][docId],
     ...data
   };
-  // Notify subscribers
   const updatedCollection = Object.values(mockStore[collectionName]);
   (mockListeners[collectionName] || []).forEach(cb => cb(updatedCollection));
+
+  // 2. Background async write to Firestore (with 1.5s timeout)
+  if (!isMock && db) {
+    try {
+      const docRef = doc(db, collectionName, docId);
+      const writePromise = setDoc(docRef, data, { merge: true });
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500));
+      await Promise.race([writePromise, timeoutPromise]);
+    } catch (err: any) {
+      console.warn(`[Firestore] Cloud notice for ${collectionName}/${docId}:`, err.message);
+    }
+  }
 };
 
 // Add doc helper
